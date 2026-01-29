@@ -9,6 +9,17 @@ Extract structured lab test data from medical PDF reports (RCMC, Kaiser, Monumen
 
 ## Version History
 
+### v1.1.2 - 2026-01-29 (Panel Name Extraction Fix)
+**Bug Fixes:**
+- Fixed panel name extraction to work across all pages (was only extracting from individual pages)
+- Extract panel name from full document first, then apply to all results
+- Added filename fallback when panel header not found in document (e.g., `DATE--PANEL_NAME--FACILITY.pdf`)
+- Improved Kaiser panel pattern to handle various header formats
+
+**Result:** All Kaiser and Monument results now have panel names populated.
+
+---
+
 ### v1.1.1 - 2026-01-29 (Monument Reference Range Fix)
 **Bug Fixes:**
 - Fixed Monument multi-line reference range parsing (e.g., "0.60 -" on one line, "1.10" on next)
