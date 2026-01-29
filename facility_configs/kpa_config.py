@@ -41,7 +41,9 @@ class KPAConfig(FacilityConfig):
     date_pattern = r'Final result\s*\((?P<date>\d{2}/\d{2}/\d{4})'
 
     # Panel name pattern: "LIPID PANEL (LIPID PANEL...) - Final result" or "TSH (THYROID...) - Final result"
-    panel_pattern = r'^([A-Z][A-Z0-9\s,]+?)(?:\s*\([^)]*\))?\s*-\s*Final result'
+    # Note: The pattern may span multiple lines due to OCR, so we use a simpler pattern
+    # that captures the panel name at the start before any parenthetical
+    panel_pattern = r'^([A-Z][A-Z0-9\s,]+?)\s*[\(\n].*?-\s*Final result'
 
     # Page marker: KPA 45
     page_marker_pattern = r'^KPA\s+\d+\s*$'
@@ -110,12 +112,32 @@ class KPAConfig(FacilityConfig):
         return False
 
     def extract_panel_name(self, text: str) -> str:
-        """Extract the panel/test name from header."""
-        match = re.search(self.panel_pattern, text, re.MULTILINE | re.IGNORECASE)
+        """Extract the panel/test name from header.
+
+        Handles multi-line headers where panel name and "- Final result" may be
+        on different lines due to OCR line breaks.
+        """
+        # First try the standard pattern (same line)
+        match = re.search(self.panel_pattern, text, re.MULTILINE | re.IGNORECASE | re.DOTALL)
         if match:
             panel = match.group(1).strip()
-            # Clean up the panel name
             return panel
+
+        # Fallback: look for panel name directly before "- Final result"
+        # Handles cases like "CREATININE - Final result" or "LIPID PANEL - Final result"
+        direct_match = re.search(r'^([A-Z][A-Z0-9\s,]+?)\s*-\s*Final result', text, re.MULTILINE | re.IGNORECASE)
+        if direct_match:
+            return direct_match.group(1).strip()
+
+        # Another fallback: look for panel name at the start before any parenthesis
+        # Handles cases like "COMPREHENSIVE METABOLIC PANEL (..."
+        first_line_match = re.match(r'^([A-Z][A-Z0-9\s,]+?)(?:\s*\(|\s*$)', text)
+        if first_line_match:
+            panel = first_line_match.group(1).strip()
+            # Verify this isn't a component name by checking if "Final result" appears nearby
+            if 'Final result' in text[:500]:
+                return panel
+
         return ""
 
     def extract_results(self, text: str, source_filename: str) -> Generator[LabResult, None, None]:

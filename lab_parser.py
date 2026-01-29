@@ -247,17 +247,39 @@ def process_pdf(pdf_path: Path, logger: logging.Logger, temp_dir: Path) -> list[
     # Extract text and parse
     try:
         with pdfplumber.open(read_path) as pdf:
-            for page_num, page in enumerate(pdf.pages, start=1):
+            # First pass: extract all page texts and find document-level panel name
+            page_texts = []
+            for page in pdf.pages:
                 text = page.extract_text()
-                if not text:
-                    logger.debug(f"No text on page {page_num} of {filename}")
-                    continue
+                if text:
+                    page_texts.append(text)
 
+            # Extract panel name from full document (typically in first page header)
+            full_text = '\n'.join(page_texts)
+            doc_panel_name = config.extract_panel_name(full_text) if hasattr(config, 'extract_panel_name') else ""
+
+            # Fallback: extract panel name from filename if not found in document
+            # Filename format: DATE--PANEL_NAME--FACILITY.pdf
+            if not doc_panel_name:
+                parts = filename.replace('.pdf', '').split('--')
+                if len(parts) >= 3:
+                    # Middle parts are the panel name (may have multiple -- separators)
+                    doc_panel_name = '--'.join(parts[1:-1]).upper()
+                    logger.debug(f"Panel name from filename: {doc_panel_name}")
+
+            logger.debug(f"Document panel name: {doc_panel_name}")
+
+            # Second pass: extract results from each page
+            for page_num, text in enumerate(page_texts, start=1):
                 logger.debug(f"Page {page_num} text length: {len(text)}")
 
                 # Extract results using facility-specific config
                 for result in config.extract_results(text, filename):
-                    results.append(result.to_dict())
+                    # Use document-level panel name if page-level is empty
+                    result_dict = result.to_dict()
+                    if not result_dict.get('panel_name') and doc_panel_name:
+                        result_dict['panel_name'] = doc_panel_name
+                    results.append(result_dict)
 
     except Exception as e:
         logger.exception(f"Error processing {filename}: {e}")
