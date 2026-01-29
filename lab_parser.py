@@ -340,9 +340,33 @@ def process_pdf(pdf_path: Path) -> Dict[str, Any]:
                 for page_num, text in enumerate(page_texts, start=1):
                     # Extract results using facility-specific config
                     for result in config.extract_results(text, filename):
+                        # Use document-level panel name if page-level is empty
                         result_dict = result.to_dict()
+                        
+                        # 1. Panel Name Logic
+                        # Use doc_panel_name if result has none
                         if not result_dict.get('panel_name') and doc_panel_name:
                             result_dict['panel_name'] = doc_panel_name
+                        
+                        # specific cleanup for "Labs-Visit" or empty panels -> use Component name
+                        current_panel = result_dict.get('panel_name', '').strip().upper()
+                        if not current_panel or current_panel == 'LABS-VISIT':
+                            result_dict['panel_name'] = result_dict.get('component')
+
+                        # 2. Date Logic
+                        # If date is missing, try to extract from filename (YYYY-MM-DD)
+                        if not result_dict.get('test_date'):
+                            try:
+                                # Filename format: YYYY-MM-DD--...
+                                date_part = filename[:10]
+                                # Simple validation regex
+                                if re.match(r'^\d{4}-\d{2}-\d{2}$', date_part):
+                                    # Convert YYYY-MM-DD to MM/DD/YYYY to match other dates
+                                    y, m, d = date_part.split('-')
+                                    result_dict['test_date'] = f"{m}/{d}/{y}"
+                            except Exception:
+                                pass
+
                         results.append(result_dict)
 
         except Exception as e:
