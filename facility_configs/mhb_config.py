@@ -51,9 +51,9 @@ class MHBConfig(FacilityConfig):
     # Note: [=\s]* handles OCR artifacts like "=" between method and date
     pattern_complete = (
         r'^(?P<component>[A-Za-z][A-Za-z0-9\s,\(\)]+?)\s+'
-        r'(?P<value>[\d.]+)\s+'
-        r'(?P<ref_range>[\d.]+\s*-\s*[\d.]+)\s+'
-        r'(?:(?P<method>[A-Z][A-Z\s&]+?)\s+)?'
+        r'(?P<value>[\d.,]+)\s+'
+        r'(?P<ref_range>[\d.,]+\s*-\s*[\d.,]+)\s+'
+        r'(?:(?P<method>[A-Z][A-Z\s&-]+?)\s+)?'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>MONUMENT)'
     )
@@ -63,9 +63,9 @@ class MHBConfig(FacilityConfig):
     # Note: [=\s]* handles OCR artifacts like "=" between method and date
     pattern_partial_ref = (
         r'^(?P<component>[A-Za-z][A-Za-z0-9\s,\(\)]+?)\s+'
-        r'(?P<value>[\d.]+)\s+'
-        r'(?P<ref_start>[\d.]+)\s*-\s*'
-        r'(?:(?P<method>[A-Z][A-Z\s&]+?)\s+)?'
+        r'(?P<value>[\d.,]+)\s+'
+        r'(?P<ref_start>[\d.,]+)\s*-\s*'
+        r'(?:(?P<method>[A-Z][A-Z\s&-]+?)\s+)?'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>MONUMENT)'
     )
@@ -75,9 +75,9 @@ class MHBConfig(FacilityConfig):
     # or "Hemoglobin 13.9 11.5 15.5 SPECTROPHOTOMETRY..." (missing hyphen)
     pattern_simple = (
         r'^(?P<component>[A-Za-z][A-Za-z0-9\s,\(\)]+?)\s+'
-        r'(?P<value>[\d.]+)\s+'
-        r'(?P<ref_range>[<>]?[\d.\-\s]+?)\s+'
-        r'(?:(?P<method>[A-Z][A-Z\s&]+?)\s+)?'
+        r'(?P<value>[\d.,]+)\s+'
+        r'(?P<ref_range>[<>]?[\d.,\-\s]+?)\s+'
+        r'(?:(?P<method>[A-Z][A-Z\s&-]+?)\s+)?'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>MONUMENT)'
     )

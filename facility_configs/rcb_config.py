@@ -51,7 +51,7 @@ class RCBConfig(FacilityConfig):
     row_pattern_with_ref = (
         r'^F\s+'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
-        r'(?P<value>[\d.<>]+)\s*'
+        r'(?P<value>[\d.,<>]+)\s*'
         r'(?P<flag>[HL]+)?\s+'
         r'(?P<ref_range>[^\(\n]+?)\s*'
         r'\((?P<unit>[^)]+)\)'
@@ -62,7 +62,7 @@ class RCBConfig(FacilityConfig):
     row_pattern_no_unit = (
         r'^F\s+'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
-        r'(?P<value>[\d.<>]+)\s*'
+        r'(?P<value>[\d.,<>]+)\s*'
         r'(?P<flag>[HL]+)?\s+'
         r'(?P<ref_range>[\d.\-<>]+(?:-[0-9.]+)?)\s*$'
     )
@@ -71,8 +71,16 @@ class RCBConfig(FacilityConfig):
     row_pattern_no_ref = (
         r'^F\s+'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
-        r'(?P<value>[\d.<>]+)\s*'
+        r'(?P<value>[\d.,<>]+)\s*'
         r'\((?P<unit>[^)]+)\)'
+    )
+
+    # Row pattern with loose unit (not in parens), e.g. "50,000 CFU/ml"
+    row_pattern_loose_unit = (
+        r'^F\s+'
+        r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
+        r'(?P<value>[\d.,<>]+)\s+'
+        r'(?P<unit>[^\s\(\)]+)'
     )
 
     def extract_panel_name(self, text: str) -> str:
@@ -155,6 +163,26 @@ class RCBConfig(FacilityConfig):
                 ref_range="",  # No reference range
                 unit=self.normalize_unit(match.group('unit')),
                 flag="",  # No flag without ref range
+                page_marker=page_marker,
+            )
+            yield result
+
+        # Fourth pass: try pattern with loose unit (no parens)
+        for match in re.finditer(self.row_pattern_loose_unit, text, re.MULTILINE | re.IGNORECASE):
+            line_start = match.start()
+            if line_start in matched_lines:
+                continue
+
+            result = LabResult(
+                source=source_filename,
+                facility=self.name,
+                panel_name=panel_name,
+                component=self.normalize_component_name(match.group('component')),
+                test_date=test_date,
+                value=self.normalize_value(match.group('value')),
+                ref_range="",  # No reference range
+                unit=self.normalize_unit(match.group('unit')),
+                flag="",  # No flag
                 page_marker=page_marker,
             )
             yield result

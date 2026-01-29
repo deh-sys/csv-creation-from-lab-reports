@@ -53,8 +53,8 @@ class KPAConfig(FacilityConfig):
     # CHOLESTEROL 195 0-199 08/06/2021 KAISER
     pattern_full = (
         r'^(?P<component>[A-Z][A-Z0-9\s,\'\-#%]+?)\s+'
-        r'(?P<value>[\d.]+)\s+'
-        r'(?P<ref_range>[\d.]+\s*-\s*[\d.]+)\s+'
+        r'(?P<value>[<>]*[\d.,]+)\s+'
+        r'(?P<ref_range>[\d.,]+\s*-\s*[\d.,]+)\s+'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>[A-Z0-9\s]+)'
     )
@@ -64,8 +64,8 @@ class KPAConfig(FacilityConfig):
     # or: HDL TES 39.0 - 08/06/2021 KAISER
     pattern_partial_ref = (
         r'^(?P<component>[A-Z][A-Z0-9\s,\'\-#%]+?)\s+'
-        r'(?P<value>[\d.]+)\s+'
-        r'(?P<ref_start>[\d.]+)\s*-\s*'
+        r'(?P<value>[<>]*[\d.,]+)\s+'
+        r'(?P<ref_start>[\d.,]+)\s*-\s*'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>[A-Z0-9\s]+)'
     )
@@ -73,7 +73,8 @@ class KPAConfig(FacilityConfig):
     # Pattern 3: Simple pattern - component name, value, and date (no ref range on same line)
     pattern_simple = (
         r'^(?P<component>[A-Z][A-Z0-9\s,\'\-#%]+?)\s+'
-        r'(?P<value>[\d.]+)\s+'
+        r'(?P<value>[<>]*[\d.,]+)\s+'
+        r'(?:(?P<unit>[a-zA-Z/%\d]+)\s+)?'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>[A-Z0-9\s]+)'
     )
@@ -196,7 +197,7 @@ class KPAConfig(FacilityConfig):
                     if i + 1 < len(lines):
                         next_line = lines[i + 1].strip()
                         # Look for number at start of next line
-                        ref_end_match = re.match(r'^([\d.]+)', next_line)
+                        ref_end_match = re.match(r'^([\d.,]+)', next_line)
                         if ref_end_match:
                             ref_range = f"{ref_start}-{ref_end_match.group(1)}"
                             # Also check for unit on same line
@@ -212,6 +213,8 @@ class KPAConfig(FacilityConfig):
                 if match:
                     component = match.group('component')
                     value = match.group('value')
+                    if match.group('unit'):
+                        unit = match.group('unit')
                     row_date = match.group('date')
 
             # Try Pattern 4: Key-Value (Dipstick)
