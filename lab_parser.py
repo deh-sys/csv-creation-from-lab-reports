@@ -8,10 +8,11 @@ Supports multiple facilities:
   - Monument Health - Image-based PDFs requiring OCR
 
 Usage:
-  python lab_parser.py
+  python3 lab_parser.py
   Then drag your input folder when prompted.
 """
 
+import concurrent.futures
 import csv
 import logging
 import os
@@ -22,6 +23,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Tuple, List, Dict, Any
 
 # Check dependencies before importing
 try:
@@ -36,6 +38,18 @@ except ImportError:
     print("ERROR: tqdm not installed. Run: pip install tqdm")
     sys.exit(1)
 
+try:
+    import pandas as pd
+except ImportError:
+    print("ERROR: pandas not installed. Run: pip install pandas xlsxwriter")
+    sys.exit(1)
+
+try:
+    import xlsxwriter
+except ImportError:
+    print("ERROR: xlsxwriter not installed. Run: pip install xlsxwriter")
+    sys.exit(1)
+
 from facility_configs import get_config_for_filename, FACILITY_CONFIGS
 
 
@@ -46,7 +60,7 @@ from facility_configs import get_config_for_filename, FACILITY_CONFIGS
 SCRIPT_DIR = Path(__file__).parent.resolve()
 OUTPUT_DIR = SCRIPT_DIR / "output"
 LOGS_DIR = SCRIPT_DIR / "logs"
-OUTPUT_CSV = OUTPUT_DIR / "lab_results.csv"
+OUTPUT_FILE = OUTPUT_DIR / "lab_results.xlsx"
 DEBUG_LOG = LOGS_DIR / "_debug.log"
 MISSED_FILES_LOG = LOGS_DIR / "missed_files.txt"
 
@@ -140,6 +154,38 @@ def prompt_for_input_folder() -> Path:
         return folder_path
 
 
+def prompt_for_output_folder() -> Path:
+    """Prompt user for output folder path."""
+    default_dir = Path.home() / "Desktop"
+    print(f"\nDrag and drop your output folder here (Press Enter for Desktop):")
+
+    while True:
+        user_input = input(f"[{default_dir}] > ").strip()
+
+        if not user_input:
+            return default_dir
+
+        folder_path = Path(sanitize_path(user_input))
+
+        if folder_path.exists():
+            if not folder_path.is_dir():
+                print(f"Path is not a directory: {folder_path}")
+                continue
+            return folder_path
+
+        # If path doesn't exist, ask to create
+        print(f"Folder does not exist: {folder_path}")
+        create = input("Create this folder? (y/N) > ").strip().lower()
+        if create == 'y':
+            try:
+                folder_path.mkdir(parents=True, exist_ok=True)
+                return folder_path
+            except Exception as e:
+                print(f"Error creating folder: {e}")
+        else:
+            print("Please choose an existing folder.")
+
+
 # ============================================================================
 # PDF Discovery
 # ============================================================================
@@ -186,107 +232,129 @@ def needs_ocr(pdf_path: Path) -> bool:
         return True
 
 
-def ocr_pdf(pdf_path: Path, output_path: Path, logger: logging.Logger) -> bool:
+def ocr_pdf(pdf_path: Path, output_path: Path, jobs: int = 1) -> Tuple[bool, str]:
     """Run OCR on a PDF file."""
     try:
+        # --jobs limits the number of threads per OCR process
+        cmd = ['ocrmypdf', '--force-ocr', '--jobs', str(jobs), str(pdf_path), str(output_path)]
+        
         result = subprocess.run(
-            ['ocrmypdf', '--force-ocr', str(pdf_path), str(output_path)],
+            cmd,
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=300  # Increased timeout for safety
         )
         if result.returncode != 0:
-            logger.error(f"OCR failed for {pdf_path.name}: {result.stderr}")
-            return False
-        return True
+            return False, result.stderr
+        return True, ""
     except subprocess.TimeoutExpired:
-        logger.error(f"OCR timeout for {pdf_path.name}")
-        return False
+        return False, "OCR timeout"
     except Exception as e:
-        logger.error(f"OCR error for {pdf_path.name}: {e}")
-        return False
+        return False, str(e)
 
 
 # ============================================================================
 # PDF Processing
 # ============================================================================
 
-def process_pdf(pdf_path: Path, logger: logging.Logger, temp_dir: Path) -> list[dict]:
+def process_pdf(pdf_path: Path) -> Dict[str, Any]:
     """
     Process a single PDF file and extract lab results.
+    Designed to run in a separate process.
 
     Returns:
-        List of result dictionaries, or empty list on failure.
+        Dict with keys: 'results', 'file_path', 'logs', 'error'
     """
     results = []
+    logs = []
+    error = None
     filename = pdf_path.name
 
     # Get facility config
+    # Note: FACILITY_CONFIGS is global, so it should be available in forked process
     config = get_config_for_filename(filename)
     if not config:
-        logger.warning(f"Unknown facility pattern: {filename}")
-        return []
+        return {
+            'results': [],
+            'file_path': str(pdf_path),
+            'logs': [f"Unknown facility pattern: {filename}"],
+            'error': "Unknown facility pattern"
+        }
 
-    logger.debug(f"Processing {filename} with {config.name} config")
+    logs.append(f"Processing {filename} with {config.name} config")
 
-    # Determine which file to read (original or OCR'd)
-    read_path = pdf_path
+    # Create a temporary directory for this specific task
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        read_path = pdf_path
 
-    if config.requires_ocr:
-        # Check if OCR is actually needed
-        if needs_ocr(pdf_path):
-            ocr_output = temp_dir / f"ocr_{pdf_path.stem}.pdf"
-            if ocr_pdf(pdf_path, ocr_output, logger):
-                read_path = ocr_output
+        if config.requires_ocr:
+            # Check if OCR is actually needed
+            if needs_ocr(pdf_path):
+                ocr_output = temp_path / f"ocr_{pdf_path.stem}.pdf"
+                # Run OCR single-threaded since we are parallelizing at file level
+                success, ocr_err = ocr_pdf(pdf_path, ocr_output, jobs=1)
+                
+                if success:
+                    read_path = ocr_output
+                else:
+                    error_msg = f"OCR failed: {ocr_err}"
+                    logs.append(error_msg)
+                    return {
+                        'results': [],
+                        'file_path': str(pdf_path),
+                        'logs': logs,
+                        'error': error_msg
+                    }
             else:
-                logger.error(f"OCR failed, skipping: {filename}")
-                return []
-        else:
-            logger.debug(f"PDF already has text, skipping OCR: {filename}")
+                logs.append(f"PDF already has text, skipping OCR: {filename}")
 
-    # Extract text and parse
-    try:
-        with pdfplumber.open(read_path) as pdf:
-            # First pass: extract all page texts and find document-level panel name
-            page_texts = []
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    page_texts.append(text)
+        # Extract text and parse
+        try:
+            with pdfplumber.open(read_path) as pdf:
+                # First pass: extract all page texts
+                page_texts = []
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        page_texts.append(text)
 
-            # Extract panel name from full document (typically in first page header)
-            full_text = '\n'.join(page_texts)
-            doc_panel_name = config.extract_panel_name(full_text) if hasattr(config, 'extract_panel_name') else ""
+                # Extract panel name from full document
+                full_text = '\n'.join(page_texts)
+                doc_panel_name = ""
+                if hasattr(config, 'extract_panel_name'):
+                    raw_doc_panel = config.extract_panel_name(full_text)
+                    doc_panel_name = config.normalize_panel_name(raw_doc_panel)
 
-            # Fallback: extract panel name from filename if not found in document
-            # Filename format: DATE--PANEL_NAME--FACILITY.pdf
-            if not doc_panel_name:
-                parts = filename.replace('.pdf', '').split('--')
-                if len(parts) >= 3:
-                    # Middle parts are the panel name (may have multiple -- separators)
-                    doc_panel_name = '--'.join(parts[1:-1]).upper()
-                    logger.debug(f"Panel name from filename: {doc_panel_name}")
+                # Fallback: extract panel name from filename
+                if not doc_panel_name:
+                    parts = filename.replace('.pdf', '').split('--')
+                    if len(parts) >= 3:
+                        raw_filename_panel = '--'.join(parts[1:-1]).upper()
+                        doc_panel_name = config.normalize_panel_name(raw_filename_panel)
+                        logs.append(f"Panel name from filename: {doc_panel_name}")
 
-            logger.debug(f"Document panel name: {doc_panel_name}")
+                logs.append(f"Document panel name: {doc_panel_name}")
 
-            # Second pass: extract results from each page
-            for page_num, text in enumerate(page_texts, start=1):
-                logger.debug(f"Page {page_num} text length: {len(text)}")
+                # Second pass: extract results from each page
+                for page_num, text in enumerate(page_texts, start=1):
+                    # Extract results using facility-specific config
+                    for result in config.extract_results(text, filename):
+                        result_dict = result.to_dict()
+                        if not result_dict.get('panel_name') and doc_panel_name:
+                            result_dict['panel_name'] = doc_panel_name
+                        results.append(result_dict)
 
-                # Extract results using facility-specific config
-                for result in config.extract_results(text, filename):
-                    # Use document-level panel name if page-level is empty
-                    result_dict = result.to_dict()
-                    if not result_dict.get('panel_name') and doc_panel_name:
-                        result_dict['panel_name'] = doc_panel_name
-                    results.append(result_dict)
+        except Exception as e:
+            error = str(e)
+            logs.append(f"Error processing {filename}: {e}")
 
-    except Exception as e:
-        logger.exception(f"Error processing {filename}: {e}")
-        return []
-
-    logger.debug(f"Extracted {len(results)} results from {filename}")
-    return results
+    return {
+        'results': results,
+        'file_path': str(pdf_path),
+        'logs': logs,
+        'error': error
+    }
 
 
 # ============================================================================
@@ -295,7 +363,7 @@ def process_pdf(pdf_path: Path, logger: logging.Logger, temp_dir: Path) -> list[
 
 def process_all_pdfs(pdf_files: list[Path], logger: logging.Logger) -> tuple[list[dict], list[str], list[str]]:
     """
-    Process all PDF files and return results.
+    Process all PDF files in parallel and return results.
 
     Returns:
         Tuple of (all_results, processed_files, missed_files)
@@ -303,35 +371,182 @@ def process_all_pdfs(pdf_files: list[Path], logger: logging.Logger) -> tuple[lis
     all_results = []
     processed_files = []
     missed_files = []
+    
+    # Use all available CPUs
+    max_workers = os.cpu_count() or 1
+    logger.info(f"Starting parallel processing with {max_workers} workers")
 
-    # Create temp directory for OCR output
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-
-        # Process with progress bar
-        for pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="file"):
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_file = {executor.submit(process_pdf, pdf): pdf for pdf in pdf_files}
+        
+        # Process as they complete
+        for future in tqdm(concurrent.futures.as_completed(future_to_file), total=len(pdf_files), desc="Processing PDFs", unit="file"):
+            pdf_path = future_to_file[future]
             try:
-                results = process_pdf(pdf_path, logger, temp_path)
-                if results:
-                    all_results.extend(results)
-                    processed_files.append(str(pdf_path))
-                else:
+                data = future.result()
+                
+                # Unpack results
+                file_results = data.get('results', [])
+                file_logs = data.get('logs', [])
+                error = data.get('error')
+                
+                # Write logs to main debug log
+                for log_msg in file_logs:
+                    logger.debug(log_msg)
+                
+                if error:
+                    logger.error(f"Error in {pdf_path.name}: {error}")
+                    missed_files.append(f"{pdf_path.name}: {error}")
+                elif not file_results:
+                    # No results but no crash
                     missed_files.append(f"{pdf_path.name}: No results extracted")
+                else:
+                    all_results.extend(file_results)
+                    processed_files.append(str(pdf_path))
+                    
             except Exception as e:
-                logger.exception(f"Unexpected error processing {pdf_path.name}")
+                logger.exception(f"Critical error getting result for {pdf_path.name}")
                 missed_files.append(f"{pdf_path.name}: {str(e)}")
 
     return all_results, processed_files, missed_files
 
 
-def write_csv(results: list[dict], output_path: Path):
-    """Write results to CSV file."""
-    output_path.parent.mkdir(exist_ok=True)
+def write_excel(results: list[dict], output_path: Path):
+    """
+    Write results to a formatted Excel file.
+    Features: Frozen headers, auto-filter, auto-width columns,
+    conditional formatting for flags.
+    """
+    if not results:
+        print("No results to write.")
+        return
 
-    with open(output_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
-        writer.writeheader()
-        writer.writerows(results)
+    output_path.parent.mkdir(exist_ok=True, parents=True)
+
+    # Create DataFrame
+    df = pd.DataFrame(results)
+
+    # Ensure all defined internal columns exist
+    for col in CSV_COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
+    
+    df = df[CSV_COLUMNS]  # Enforce initial internal order
+
+    # Rename columns to display names
+    column_map = {
+        'source': 'Source File',
+        'facility': 'Facility',
+        'panel_name': 'Panel Name',
+        'component': 'Component',
+        'test_date': 'Date',
+        'value': 'Result',
+        'ref_range': 'Ref Range',
+        'unit': 'Units',
+        'flag': 'Flag',
+        'page_marker': 'Bates'
+    }
+    df = df.rename(columns=column_map)
+
+    # Reorder columns (Date first, Source/Facility last)
+    display_order = [
+        'Date',
+        'Panel Name',
+        'Component',
+        'Result',
+        'Flag',
+        'Ref Range',
+        'Units',
+        'Bates',
+        'Facility',
+        'Source File'
+    ]
+    df = df[display_order]
+
+    # Create Excel writer
+    try:
+        with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+            sheet_name = 'Lab Results'
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+            # Get workbook and worksheet objects
+            workbook = writer.book
+            worksheet = writer.sheets[sheet_name]
+
+            # Define formats
+            header_format = workbook.add_format({
+                'bold': True,
+                'text_wrap': False,
+                'valign': 'top',
+                'fg_color': '#D7E4BC',  # Light green/grayish
+                'border': 1,
+                'font_name': 'Baskerville',
+                'font_size': 14
+            })
+            
+            # Base format for all data cells
+            data_format = workbook.add_format({
+                'font_name': 'Calibri',
+                'font_size': 13
+            })
+
+            # Format for Flag column (Red text for abnormal)
+            red_text = workbook.add_format({'font_color': '#9C0006', 'bg_color': '#FFC7CE'})
+            
+            # Format for Ref Range (Force text + data font)
+            text_format = workbook.add_format({
+                'num_format': '@',
+                'font_name': 'Calibri',
+                'font_size': 13
+            })
+
+            # Apply formatting
+            
+            # 1. Set column widths and base format
+            for idx, col in enumerate(df.columns):
+                # Calculate max width of data in this column
+                max_len = max(
+                    df[col].astype(str).map(len).max(),
+                    len(col)
+                ) + 2
+                
+                # Cap width at 60 chars
+                width = min(max_len, 60)
+                
+                # Apply text format to 'Ref Range', normal data format to others
+                if col == 'Ref Range':
+                    worksheet.set_column(idx, idx, width, text_format)
+                else:
+                    worksheet.set_column(idx, idx, width, data_format)
+
+            # 2. Write headers again with format
+            for col_num, value in enumerate(df.columns):
+                worksheet.write(0, col_num, value, header_format)
+
+            # 3. Freeze top row
+            worksheet.freeze_panes(1, 0)
+
+            # 4. Enable AutoFilter
+            worksheet.autofilter(0, 0, len(df), len(df.columns) - 1)
+
+            # 5. Conditional Formatting for Flag column
+            # Find the 'Flag' column index (using new name)
+            flag_col_idx = df.columns.get_loc('Flag')
+            
+            # Apply to all rows in flag column
+            worksheet.conditional_format(1, flag_col_idx, len(df), flag_col_idx, {
+                'type': 'cell',
+                'criteria': '!=',
+                'value': '""',  # Not empty
+                'format': red_text
+            })
+            
+    except Exception as e:
+        print(f"Error writing Excel file: {e}")
+        # Fallback to CSV if Excel fails? 
+        # For now, just raise or print, as user explicitly wanted Excel.
+        raise
 
 
 def write_missed_files(missed_files: list[str], output_path: Path):
@@ -363,6 +578,11 @@ def main():
     # Get input folder
     input_folder = prompt_for_input_folder()
     logger.info(f"Input folder: {input_folder}")
+
+    # Get output folder
+    output_folder = prompt_for_output_folder()
+    logger.info(f"Output folder: {output_folder}")
+    output_file_path = output_folder / "lab_results.xlsx"
 
     # Find all PDFs
     print("\nScanning for PDF files...")
@@ -397,9 +617,9 @@ def main():
     # Process all PDFs
     all_results, processed_files, missed_files = process_all_pdfs(known_pdfs, logger)
 
-    # Write output CSV
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    write_csv(all_results, OUTPUT_CSV)
+    # Write output Excel
+    print(f"Writing results to {output_file_path.name}...")
+    write_excel(all_results, output_file_path)
 
     # Write missed files log if any
     if missed_files:
@@ -416,7 +636,7 @@ def main():
 
     print(f"✅ Processed: {processed_count} | ⚠️  Skipped: {skipped_count} | ❌ Errors: {error_count}")
     print(f"\nResults: {len(all_results)} lab values extracted")
-    print(f"Output:  {OUTPUT_CSV}")
+    print(f"Output:  {output_file_path}")
 
     if missed_files:
         print(f"Missed:  {MISSED_FILES_LOG}")

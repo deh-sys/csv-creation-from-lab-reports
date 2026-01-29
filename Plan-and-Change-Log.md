@@ -9,6 +9,56 @@ Extract structured lab test data from medical PDF reports (RCMC, Kaiser, Monumen
 
 ## Version History
 
+### v1.5.0 - 2026-01-29 (Parallel Processing)
+**Performance:**
+- **Multi-Core Support:** Now processes multiple PDFs simultaneously using all available CPU cores (`ProcessPoolExecutor`).
+- **Safety:** Refactored extraction logic into stateless workers to prevent memory/resource conflicts.
+- **Optimization:** Configured OCR to run single-threaded per file to maximize throughput without overloading the system.
+
+---
+
+### v1.4.0 - 2026-01-29 (Panel Name Normalization)
+**Features:**
+- **Standardized Panel Names:** Merged different facility names into a single standard:
+  - `CMP` (matches "Complete Metabolic Panel", "ABNORMAL_COMPREHENSIVE...", etc.)
+  - `CBC` (matches "CBC Auto Diff", "ABNORMAL_CBC_W", etc.)
+  - `Lipid Panel` (matches "LIPID PANEL", "Lipid Panel")
+  - `TSH` (matches "TSH (Thyroid...)", "TSH")
+  - `Urinalysis` (matches "LABS-UA", "URINALYSIS")
+- Improves sorting and pivot table analysis in Excel.
+
+---
+
+### v1.3.0 - 2026-01-29 (Excel Output)
+**Features:**
+- Switched primary output from CSV to Excel (`.xlsx`) to prevent data corruption (e.g., "7-35" becoming "Jul-35").
+- **Smart Formatting:**
+  - Frozen top row (headers).
+  - Auto-filters enabled by default.
+  - Columns auto-sized to fit content.
+  - `ref_range` explicitly set to Text format.
+  - **Conditional Formatting:** Results with flags (H, L, A) are highlighted in red.
+
+---
+
+### v1.2.1 - 2026-01-29 (Regex Refinements)
+**Bug Fixes:**
+- **RCMC:** Fixed reference ranges spanning multiple lines (e.g. capturing "Test performed at..." in Ratio).
+- **RCMC:** Added support for rows with no units (e.g., Lipid Panel Ratio).
+- **RCMC:** Fixed "HH" flag getting merged into reference range (e.g., "HH 1.12-1.32").
+- **Monument:** Fixed truncated reference ranges (e.g., "11.5" instead of "11.5-15.5") by enforcing Method matching.
+
+---
+
+### v1.2.0 - 2026-01-29 (Interactive Output)
+**Features:**
+- Added interactive prompt for output folder location
+- Defaults to Desktop (`~/Desktop`) if no folder selected
+- Automatically asks to create folder if it doesn't exist
+- Logs remain in the script's `logs/` directory
+
+---
+
 ### v1.1.2 - 2026-01-29 (Panel Name Extraction Fix)
 **Bug Fixes:**
 - Fixed panel name extraction to work across all pages (was only extracting from individual pages)
@@ -44,7 +94,7 @@ Extract structured lab test data from medical PDF reports (RCMC, Kaiser, Monumen
 
 ### v1.0.0 - 2026-01-28 (Initial Release)
 **Features:**
-- Interactive single-command script (`python lab_parser.py`)
+- Interactive single-command script (`python3 lab_parser.py`)
 - Modular facility configuration system
 - Support for 3 medical facilities:
   - RCMC: Native text PDFs

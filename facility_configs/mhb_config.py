@@ -71,11 +71,13 @@ class MHBConfig(FacilityConfig):
     )
 
     # Pattern 3: Simpler pattern as fallback
+    # Matches: "Hemoglobin 13.9 11.5-15.5 SPECTROPHOTOMETRY..."
+    # or "Hemoglobin 13.9 11.5 15.5 SPECTROPHOTOMETRY..." (missing hyphen)
     pattern_simple = (
         r'^(?P<component>[A-Za-z][A-Za-z0-9\s,\(\)]+?)\s+'
         r'(?P<value>[\d.]+)\s+'
         r'(?P<ref_range>[<>]?[\d.\-\s]+?)\s+'
-        r'.*?'
+        r'(?P<method>[A-Z][A-Z\s&]+?)\s+'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>MONUMENT)'
     )
@@ -125,7 +127,8 @@ class MHBConfig(FacilityConfig):
         page_marker = self.extract_page_marker(text)
 
         # Get panel name from header
-        panel_name = self.extract_panel_name(text)
+        raw_panel_name = self.extract_panel_name(text)
+        panel_name = self.normalize_panel_name(raw_panel_name)
 
         # Check for (ABNORMAL) prefix in the entire text
         has_abnormal = '(ABNORMAL)' in text.upper()

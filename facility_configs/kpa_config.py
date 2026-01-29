@@ -149,8 +149,10 @@ class KPAConfig(FacilityConfig):
         page_marker = self.extract_page_marker(text)
 
         # Get panel name from header
-        panel_name = self.extract_panel_name(text)
+        raw_panel_name = self.extract_panel_name(text)
+        panel_name = self.normalize_panel_name(raw_panel_name)
 
+        # Parse each line
         lines = text.split('\n')
         i = 0
         while i < len(lines):

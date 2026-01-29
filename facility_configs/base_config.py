@@ -53,12 +53,75 @@ class FacilityConfig(ABC):
     row_pattern: str = ""
     page_marker_pattern: str = ""
 
+    # Standard Panel Name Mappings
+    # Key = Standardized Name
+    # Value = List of regex patterns to match against the raw panel name
+    PANEL_MAPPINGS = {
+        'CMP': [
+            r'Comprehensive\s*Metabolic',
+            r'^CMP',
+            r'ABNORMAL_COMPREHENSIVE_METABOLIC',
+        ],
+        'CBC': [
+            r'^CBC',
+            r'ABNORMAL_CBC',
+        ],
+        'Lipid Panel': [
+            r'Lipid\s*Panel',
+        ],
+        'TSH': [
+            r'^TSH',
+        ],
+        'Urinalysis': [
+            r'LABS-UA',
+            r'URINALYSIS',
+        ],
+        'Iron Panel': [
+            r'LABS-IRON',
+        ],
+        'Vitamin B12/Folate': [
+            r'Vitamin\s*B12\s*and\s*Folate',
+        ],
+        'Vitamin B12': [
+            r'VITAMIN\s*B12',
+        ],
+        'Protein Electrophoresis': [
+            r'PROTEIN\s*ELECTROPHORESIS',
+        ],
+        'PTH': [
+            r'^PTH',
+        ],
+    }
+
     def matches_filename(self, filename: str) -> bool:
         """Check if this config should handle the given filename."""
         for pattern in self.filename_patterns:
             if re.search(pattern, filename, re.IGNORECASE):
                 return True
         return False
+
+    def normalize_panel_name(self, raw_name: str) -> str:
+        """
+        Normalize standard panel names (e.g., 'CMP (Complete...)' -> 'CMP').
+        """
+        if not raw_name:
+            return ""
+        
+        raw_clean = raw_name.strip()
+        
+        for standard_name, patterns in self.PANEL_MAPPINGS.items():
+            for pattern in patterns:
+                if re.search(pattern, raw_clean, re.IGNORECASE):
+                    return standard_name
+                    
+        # Return Title Case if no match found (cleans up ALL CAPS)
+        # But keep acronyms like 'ALT' or 'DNA' if distinct? 
+        # For now, just return as-is or title case.
+        # Let's return original string if no match, but maybe Capitalized.
+        if raw_clean.isupper():
+            return raw_clean.title()
+            
+        return raw_clean
 
     def extract_date(self, text: str) -> str:
         """Extract the collection/test date from page text."""

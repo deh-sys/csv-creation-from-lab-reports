@@ -1,6 +1,6 @@
 # Lab Report Parser
 
-Extracts structured lab test results from medical PDF reports into a single CSV file.
+Extracts structured lab test results from medical PDF reports into a formatted Excel file.
 
 ## Supported Facilities
 
@@ -13,40 +13,52 @@ Extracts structured lab test results from medical PDF reports into a single CSV 
 ## How to Run
 
 ```bash
-python lab_parser.py
+.venv/bin/python3 lab_parser.py
 ```
 
-Then drag your input folder containing PDF files when prompted.
+1. Drag and drop your **input folder** (containing PDFs) when prompted.
+2. Drag and drop your **output folder** (or press Enter for Desktop) when prompted.
 
 ## Requirements
 
 - Python 3.10+
-- pdfplumber (`pip install pdfplumber`)
-- tqdm (`pip install tqdm`)
-- ocrmypdf (for Kaiser and Monument files): `brew install ocrmypdf`
+- **ocrmypdf** (for Kaiser and Monument files): `brew install ocrmypdf`
+- All Python dependencies are pre-installed in the `.venv` folder.
 
 ## Output
 
 | File | Location | Description |
 |------|----------|-------------|
-| Lab results CSV | `output/lab_results.csv` | All extracted lab values |
+| Lab results Excel | `lab_results.xlsx` | All extracted lab values (Formatted) |
 | Debug log | `logs/_debug.log` | Verbose processing details |
 | Missed files | `logs/missed_files.txt` | Files that failed processing |
 
-## CSV Columns
+## Performance
+
+- **Parallel Processing:** Automatically uses all available CPU cores to process files significantly faster.
+- **OCR Optimization:** Smartly manages OCR threads to prevent system slowdowns while maximizing throughput.
+
+## Excel Formatting
+
+- **Header:** 14pt Baskerville (Frozen & Filtered).
+- **Data:** 13pt Calibri.
+- **Reference Ranges:** Forced to Text format (prevents date conversion).
+- **Abnormal Flags:** Highlighted in Red.
+
+## Excel Columns
 
 | Column | Description | Example |
 |--------|-------------|---------|
-| source | Source PDF filename | `2024-11-14--Labs-CBC--RCMC.pdf` |
-| facility | Facility name | `RCMC` |
-| panel_name | Test panel name | `CBC Auto Diff` |
-| component | Individual measurement | `WBC` |
-| test_date | Collection date | `11/14/2024` |
-| value | Result value | `5.1` |
-| ref_range | Reference range | `4.5-10.5` |
-| unit | Measurement unit | `K/uL` |
-| flag | Abnormal flag (H/L/blank) | `L` |
-| page_marker | Page marker from footer | `RCB 3` |
+| Date | Collection date | `11/14/2024` |
+| Panel Name | Test panel name | `CBC Auto Diff` |
+| Component | Individual measurement | `WBC` |
+| Result | Result value | `5.1` |
+| Flag | Abnormal flag (H/L/blank) | `L` |
+| Ref Range | Reference range | `4.5-10.5` |
+| Units | Measurement unit | `K/uL` |
+| Bates | Page marker from footer | `RCB 3` |
+| Facility | Facility name | `RCMC` |
+| Source File | Source PDF filename | `2024-11-14--Labs-CBC--RCMC.pdf` |
 
 ### Panel vs Component
 
