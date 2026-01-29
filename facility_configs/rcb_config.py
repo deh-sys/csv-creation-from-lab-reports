@@ -2,19 +2,17 @@
 Configuration for RCB/RCMC (Rapid City Medical Center) lab reports.
 These PDFs have native text (no OCR needed) with a consistent tabular format.
 
+Panel structure:
+  CMP (Complete Metabolic Panel)     <- Panel header
+  NAME VALUE REFERENCE RANGE         <- Column header
+  F CA 10.5 8.7-10.6 (mg/dL)        <- Component result
+  F GLU 82 70-100 (mg/dL)           <- Component result
+
 Sample row formats:
   F CA 10.5 8.7-10.6 (mg/dL)
   F RBC 4.09 L 4.20-5.40 (M/uL)  <- with flag
   F d%A1c 4.7 <6.0 (%)           <- lowercase, < in range
   F Calcium, Urine 4.4 Not Estab. (mg/dL)  <- text ref range
-
-Pattern breakdown:
-  F = status marker (Final)
-  test_name = letters, numbers, symbols (flexible)
-  value = numeric with optional < or >
-  flag = optional H or L
-  ref_range = numeric range OR text like "Not Estab."
-  unit = inside parentheses
 """
 
 import re
@@ -39,11 +37,19 @@ class RCBConfig(FacilityConfig):
     # Page marker: RCB 45 or RCB 3
     page_marker_pattern = r'^RCB\s+\d+\s*$'
 
+    # Panel header pattern - matches lines like:
+    # "CMP (Complete Metabolic Panel)"
+    # "CBC Auto Diff"
+    # "A1C"
+    # "Lipid Panel"
+    # Must be followed by "NAME VALUE" line
+    panel_header_pattern = r'^([A-Z][A-Za-z0-9\s,\(\)]+?)(?:\n|\r\n?)NAME\s+VALUE'
+
     # Row pattern with reference range (most common):
     # F CA 10.5 8.7-10.6 (mg/dL)
     row_pattern_with_ref = (
         r'^F\s+'
-        r'(?P<test_name>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
+        r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.<>]+)\s*'
         r'(?P<flag>[HL])?\s+'
         r'(?P<ref_range>[^\(]+?)\s*'
@@ -53,10 +59,19 @@ class RCBConfig(FacilityConfig):
     # Row pattern without reference range (e.g., F EAG 89 (mg/dL))
     row_pattern_no_ref = (
         r'^F\s+'
-        r'(?P<test_name>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
+        r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.<>]+)\s*'
         r'\((?P<unit>[^)]+)\)'
     )
+
+    def extract_panel_name(self, text: str) -> str:
+        """Extract the panel/test name from header area."""
+        match = re.search(self.panel_header_pattern, text, re.MULTILINE | re.IGNORECASE)
+        if match:
+            panel = match.group(1).strip()
+            # Clean up the panel name
+            return panel
+        return ""
 
     def extract_results(self, text: str, source_filename: str) -> Generator[LabResult, None, None]:
         """Extract lab results from RCMC page text."""
@@ -65,6 +80,9 @@ class RCBConfig(FacilityConfig):
 
         # Get page marker
         page_marker = self.extract_page_marker(text)
+
+        # Get panel name from header
+        panel_name = self.extract_panel_name(text)
 
         # Track which lines we've matched to avoid duplicates
         matched_lines = set()
@@ -77,7 +95,8 @@ class RCBConfig(FacilityConfig):
             result = LabResult(
                 source=source_filename,
                 facility=self.name,
-                test_name=self.normalize_test_name(match.group('test_name')),
+                panel_name=panel_name,
+                component=self.normalize_test_name(match.group('component')),
                 test_date=test_date,
                 value=self.normalize_value(match.group('value')),
                 ref_range=self.normalize_ref_range(match.group('ref_range')),
@@ -96,7 +115,8 @@ class RCBConfig(FacilityConfig):
             result = LabResult(
                 source=source_filename,
                 facility=self.name,
-                test_name=self.normalize_test_name(match.group('test_name')),
+                panel_name=panel_name,
+                component=self.normalize_test_name(match.group('component')),
                 test_date=test_date,
                 value=self.normalize_value(match.group('value')),
                 ref_range="",  # No reference range

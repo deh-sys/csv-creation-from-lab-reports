@@ -53,7 +53,8 @@ MISSED_FILES_LOG = LOGS_DIR / "missed_files.txt"
 CSV_COLUMNS = [
     'source',
     'facility',
-    'test_name',
+    'panel_name',
+    'component',
     'test_date',
     'value',
     'ref_range',

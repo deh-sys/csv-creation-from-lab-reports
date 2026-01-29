@@ -2,6 +2,11 @@
 Configuration for KPA/Kaiser lab reports.
 These PDFs are image-based (require OCR) with complex multi-line format.
 
+Panel structure:
+  LIPID PANEL (LIPID PANEL (CHOL, TRIG, DHDL, CALC LDL)) - Final result (08/06/2021 5:16 PM EDT)
+  Component Value Range ...
+  CHOLESTEROL 195 0-199 08/06/2021 KAISER
+
 Sample row formats (after OCR):
   CHOLESTEROL 195 0-199 08/06/2021 KAISER
   TSH 2.03 0.35 - 02/07/2022 GA
@@ -9,11 +14,11 @@ Sample row formats (after OCR):
   92.0 mg/dL ...  <- ref range continues on next line
 
 Pattern notes:
-  - Test name followed by value, partial ref range, date, and location
+  - Panel name appears in first line header before "- Final result"
+  - Component name followed by value, partial ref range, date, and location
   - Reference range may span multiple lines
   - Unit often appears on continuation line
   - Location can be KAISER, GA, etc.
-  - "Comment:" and "Interpretive Data" sections should be skipped
 """
 
 import re
@@ -35,6 +40,9 @@ class KPAConfig(FacilityConfig):
     # Date extracted from the header: "Final result (08/06/2021 5:16 PM EDT)"
     date_pattern = r'Final result\s*\((?P<date>\d{2}/\d{2}/\d{4})'
 
+    # Panel name pattern: "LIPID PANEL (LIPID PANEL...) - Final result" or "TSH (THYROID...) - Final result"
+    panel_pattern = r'^([A-Z][A-Z0-9\s,]+?)(?:\s*\([^)]*\))?\s*-\s*Final result'
+
     # Page marker: KPA 45
     page_marker_pattern = r'^KPA\s+\d+\s*$'
 
@@ -42,7 +50,7 @@ class KPAConfig(FacilityConfig):
     # Pattern 1: Full line with complete ref range
     # CHOLESTEROL 195 0-199 08/06/2021 KAISER
     pattern_full = (
-        r'^(?P<test_name>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
+        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
         r'(?P<value>[\d.]+)\s+'
         r'(?P<ref_range>[\d.]+\s*-\s*[\d.]+)\s+'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
@@ -53,16 +61,16 @@ class KPAConfig(FacilityConfig):
     # TSH 2.03 0.35 - 02/07/2022 GA
     # or: HDL TES 39.0 - 08/06/2021 KAISER
     pattern_partial_ref = (
-        r'^(?P<test_name>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
+        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
         r'(?P<value>[\d.]+)\s+'
         r'(?P<ref_start>[\d.]+)\s*-\s*'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>KAISER|GA|REGIONAL)'
     )
 
-    # Pattern 3: Simple pattern - test name, value, and date (no ref range on same line)
+    # Pattern 3: Simple pattern - component name, value, and date (no ref range on same line)
     pattern_simple = (
-        r'^(?P<test_name>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
+        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
         r'(?P<value>[\d.]+)\s+'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
         r'(?P<location>KAISER|GA|REGIONAL)'
@@ -101,6 +109,15 @@ class KPAConfig(FacilityConfig):
                 return True
         return False
 
+    def extract_panel_name(self, text: str) -> str:
+        """Extract the panel/test name from header."""
+        match = re.search(self.panel_pattern, text, re.MULTILINE | re.IGNORECASE)
+        if match:
+            panel = match.group(1).strip()
+            # Clean up the panel name
+            return panel
+        return ""
+
     def extract_results(self, text: str, source_filename: str) -> Generator[LabResult, None, None]:
         """Extract lab results from Kaiser page text."""
         # Get header date
@@ -108,6 +125,9 @@ class KPAConfig(FacilityConfig):
 
         # Get page marker
         page_marker = self.extract_page_marker(text)
+
+        # Get panel name from header
+        panel_name = self.extract_panel_name(text)
 
         lines = text.split('\n')
         i = 0
@@ -119,7 +139,7 @@ class KPAConfig(FacilityConfig):
                 i += 1
                 continue
 
-            test_name = None
+            component = None
             value = None
             ref_range = ""
             row_date = None
@@ -128,7 +148,7 @@ class KPAConfig(FacilityConfig):
             # Try Pattern 1: Full ref range on same line
             match = re.match(self.pattern_full, line, re.IGNORECASE)
             if match:
-                test_name = match.group('test_name')
+                component = match.group('component')
                 value = match.group('value')
                 ref_range = match.group('ref_range')
                 row_date = match.group('date')
@@ -137,7 +157,7 @@ class KPAConfig(FacilityConfig):
             if not match:
                 match = re.match(self.pattern_partial_ref, line, re.IGNORECASE)
                 if match:
-                    test_name = match.group('test_name')
+                    component = match.group('component')
                     value = match.group('value')
                     ref_start = match.group('ref_start')
                     row_date = match.group('date')
@@ -160,12 +180,12 @@ class KPAConfig(FacilityConfig):
             if not match:
                 match = re.match(self.pattern_simple, line, re.IGNORECASE)
                 if match:
-                    test_name = match.group('test_name')
+                    component = match.group('component')
                     value = match.group('value')
                     row_date = match.group('date')
 
             # If we found a match, create result
-            if test_name and value:
+            if component and value:
                 # Look for unit if not already found
                 if not unit and i + 1 < len(lines):
                     next_line = lines[i + 1].strip()
@@ -176,7 +196,8 @@ class KPAConfig(FacilityConfig):
                 result = LabResult(
                     source=source_filename,
                     facility=self.name,
-                    test_name=self.normalize_test_name(test_name),
+                    panel_name=panel_name,
+                    component=self.normalize_component(component),
                     test_date=row_date or header_date,
                     value=self.normalize_value(value),
                     ref_range=self.normalize_ref_range(ref_range),
@@ -188,8 +209,8 @@ class KPAConfig(FacilityConfig):
 
             i += 1
 
-    def normalize_test_name(self, name: str) -> str:
-        """Clean up test name."""
+    def normalize_component(self, name: str) -> str:
+        """Clean up component name."""
         # Remove trailing TES if present (OCR artifact)
         name = re.sub(r'\s+TES$', '', name)
         return ' '.join(name.split())

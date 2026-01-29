@@ -39,13 +39,19 @@ Then drag your input folder containing PDF files when prompted.
 |--------|-------------|---------|
 | source | Source PDF filename | `2024-11-14--Labs-CBC--RCMC.pdf` |
 | facility | Facility name | `RCMC` |
-| test_name | Test/component name | `Glucose` |
+| panel_name | Test panel name | `CBC Auto Diff` |
+| component | Individual measurement | `WBC` |
 | test_date | Collection date | `11/14/2024` |
-| value | Result value | `85` |
-| ref_range | Reference range | `70-100` |
-| unit | Measurement unit | `mg/dL` |
+| value | Result value | `5.1` |
+| ref_range | Reference range | `4.5-10.5` |
+| unit | Measurement unit | `K/uL` |
 | flag | Abnormal flag (H/L/blank) | `L` |
 | page_marker | Page marker from footer | `RCB 3` |
+
+### Panel vs Component
+
+- **panel_name**: The test panel or order (e.g., "CMP", "CBC Auto Diff", "Lipid Panel")
+- **component**: The individual measurement within that panel (e.g., "Glucose", "WBC", "Cholesterol")
 
 ## File Naming Convention
 

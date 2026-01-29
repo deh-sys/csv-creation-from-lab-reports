@@ -9,6 +9,17 @@ Extract structured lab test data from medical PDF reports (RCMC, Kaiser, Monumen
 
 ## Version History
 
+### v1.1.0 - 2026-01-29 (Panel Name Support)
+**Features:**
+- Added `panel_name` column to distinguish test panels from individual components
+- Renamed `test_name` column to `component` for clarity
+- Panel names extracted from PDF headers (e.g., "CMP (Complete Metabolic Panel)", "CBC Auto Diff")
+
+**CSV Schema Change:**
+- New column order: source, facility, panel_name, component, test_date, value, ref_range, unit, flag, page_marker
+
+---
+
 ### v1.0.0 - 2026-01-28 (Initial Release)
 **Features:**
 - Interactive single-command script (`python lab_parser.py`)

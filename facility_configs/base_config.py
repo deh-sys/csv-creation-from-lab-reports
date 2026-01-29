@@ -14,7 +14,8 @@ class LabResult:
     """Represents a single lab test result."""
     source: str = ""
     facility: str = ""
-    test_name: str = ""
+    panel_name: str = ""      # Test panel (e.g., "CMP", "CBC", "Lipid Panel")
+    component: str = ""       # Individual measurement within the panel
     test_date: str = ""
     value: str = ""
     ref_range: str = ""
@@ -26,7 +27,8 @@ class LabResult:
         return {
             'source': self.source,
             'facility': self.facility,
-            'test_name': self.test_name,
+            'panel_name': self.panel_name,
+            'component': self.component,
             'test_date': self.test_date,
             'value': self.value,
             'ref_range': self.ref_range,
