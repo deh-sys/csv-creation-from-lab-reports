@@ -50,36 +50,47 @@ class MHBConfig(FacilityConfig):
     # e.g., "Phosphorus 28 2.5-4.9 SPECTROPHOTOMETRY 08/18/2025 MONUMENT"
     # Note: [=\s]* handles OCR artifacts like "=" between method and date
     pattern_complete = (
-        r'^(?P<component>[A-Za-z][A-Za-z0-9\s,\(\)]+?)\s+'
-        r'(?P<value>[\d.,]+)\s+'
+        r'^(?P<component>[A-Za-z0-9][A-Za-z0-9\s,\(\)\-]+?)\s+'
+        r'(?P<value>[<>]*[\d.,]+)\s+'
         r'(?P<ref_range>[\d.,]+\s*-\s*[\d.,]+)\s+'
         r'(?:(?P<method>[A-Z][A-Z\s&-]+?)\s+)?'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
-        r'(?P<location>MONUMENT)'
+        r'(?P<location>[A-Z0-9\s]+)'
     )
 
     # Pattern 2: Partial ref range (ends with -)
     # e.g., "Creatinine 1.01 0.60 - SPECTROPHOTOMETRY 08/18/2025 MONUMENT"
     # Note: [=\s]* handles OCR artifacts like "=" between method and date
     pattern_partial_ref = (
-        r'^(?P<component>[A-Za-z][A-Za-z0-9\s,\(\)]+?)\s+'
-        r'(?P<value>[\d.,]+)\s+'
+        r'^(?P<component>[A-Za-z0-9][A-Za-z0-9\s,\(\)\-]+?)\s+'
+        r'(?P<value>[<>]*[\d.,]+)\s+'
         r'(?P<ref_start>[\d.,]+)\s*-\s*'
         r'(?:(?P<method>[A-Z][A-Z\s&-]+?)\s+)?'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
-        r'(?P<location>MONUMENT)'
+        r'(?P<location>[A-Z0-9\s]+)'
     )
 
     # Pattern 3: Simpler pattern as fallback
     # Matches: "Hemoglobin 13.9 11.5-15.5 SPECTROPHOTOMETRY..."
     # or "Hemoglobin 13.9 11.5 15.5 SPECTROPHOTOMETRY..." (missing hyphen)
     pattern_simple = (
-        r'^(?P<component>[A-Za-z][A-Za-z0-9\s,\(\)]+?)\s+'
-        r'(?P<value>[\d.,]+)\s+'
+        r'^(?P<component>[A-Za-z0-9][A-Za-z0-9\s,\(\)\-]+?)\s+'
+        r'(?P<value>[<>]*[\d.,]+)\s+'
         r'(?P<ref_range>[<>]?[\d.,\-\s]+?)\s+'
         r'(?:(?P<method>[A-Z][A-Z\s&-]+?)\s+)?'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
-        r'(?P<location>MONUMENT)'
+        r'(?P<location>[A-Z0-9\s]+)'
+    )
+
+    # Pattern 4: Value and Unit only (no ref range)
+    # e.g., "25-Hydroxy D2 <4.0 ng/mL 12/30/2025 MAYO"
+    pattern_no_ref = (
+        r'^(?P<component>[A-Za-z0-9][A-Za-z0-9\s,\(\)\-]+?)\s+'
+        r'(?P<value>[<>]*[\d.,]+)\s+'
+        r'(?P<unit>[a-zA-Z/%\d]+)\s+'
+        r'(?:(?P<method>[A-Z][A-Z\s&-]+?)\s+)?'
+        r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
+        r'(?P<location>[A-Z0-9\s]+)'
     )
 
     # Skip lines that are headers or metadata
@@ -190,6 +201,15 @@ class MHBConfig(FacilityConfig):
                     component = match.group('component')
                     value = match.group('value')
                     ref_range = match.group('ref_range')
+                    row_date = match.group('date')
+
+            # Try Pattern 4: No Ref Range (Value + Unit)
+            if not match:
+                match = re.match(self.pattern_no_ref, line, re.IGNORECASE)
+                if match:
+                    component = match.group('component')
+                    value = match.group('value')
+                    unit = match.group('unit')
                     row_date = match.group('date')
 
             # If we found a match, create result

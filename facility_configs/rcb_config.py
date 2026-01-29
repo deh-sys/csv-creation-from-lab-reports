@@ -49,7 +49,7 @@ class RCBConfig(FacilityConfig):
     # F CA 10.5 8.7-10.6 (mg/dL)
     # F IONIZED CALCIUM 1.43 HH 1.12-1.32 (mmol/L)
     row_pattern_with_ref = (
-        r'^F\s+'
+        r'^(?:F\s+)?'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.,<>]+)\s*'
         r'(?P<flag>[HL]+)?\s+'
@@ -60,7 +60,7 @@ class RCBConfig(FacilityConfig):
     # Row pattern with reference range but NO unit (e.g., RATIO)
     # F RATIO 1.7 0.0-6.7
     row_pattern_no_unit = (
-        r'^F\s+'
+        r'^(?:F\s+)?'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.,<>]+)\s*'
         r'(?P<flag>[HL]+)?\s+'
@@ -69,7 +69,7 @@ class RCBConfig(FacilityConfig):
 
     # Row pattern without reference range (e.g., F EAG 89 (mg/dL))
     row_pattern_no_ref = (
-        r'^F\s+'
+        r'^(?:F\s+)?'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.,<>]+)\s*'
         r'\((?P<unit>[^)]+)\)'
@@ -77,7 +77,7 @@ class RCBConfig(FacilityConfig):
 
     # Row pattern with loose unit (not in parens), e.g. "50,000 CFU/ml"
     row_pattern_loose_unit = (
-        r'^F\s+'
+        r'^(?:F\s+)?'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.,<>]+)\s+'
         r'(?P<unit>[^\s\(\)]+)'
