@@ -559,6 +559,54 @@ Check `logs/_debug.log` when results look wrong.
 
 ---
 
+## Regex Strategy & Troubleshooting Guide (Advanced)
+
+This section documents advanced strategies developed during V1.6+ debugging to handle edge cases in medical report parsing.
+
+### 1. The "Prefix Rule" for Garbage Collection
+**Problem:** When a regex pattern is too permissive (e.g., optional prefixes like `^(?:F\s+)?`), it starts matching random text in the document (addresses, patient demographics) as lab results.
+**Solution:**
+- **Strict Mode:** For ambiguous patterns (like those without a reference range or unit), **require** a distinct prefix (like `F ` in RCMC reports).
+- **Relaxed Mode:** Only allow optional prefixes if the rest of the pattern is highly specific (e.g., requires a reference range like `1.5-5.0`).
+- **Example:**
+  - `row_pattern_with_ref` (Has `1.5-5.0`): Can be `^(?:F\s+)?...` (Safe)
+  - `row_pattern_no_unit` (Has `1.5`): Must be `^F\s+...` (Unsafe otherwise)
+
+### 2. Handling "Loose" Units
+**Problem:** Units often appear without parentheses (e.g., `50,000 CFU/ml`) or are attached to narrative text.
+**Solution:**
+- Create a dedicated pattern for loose units: `(?P<unit>[^\s\(\)]+)`.
+- **Constraint:** Ensure this unit pattern doesn't eat into subsequent columns (like flags).
+- **Validation:** Disallow colons in units `[^\s:]+` to prevent matching keys like `Phone:`.
+
+### 3. OCR Artifacts & Special Characters
+**Problem:** OCR is imperfect.
+- **Hyphens:** `DIOXETANE-BASED` -> Hyphen inside a word.
+- **Commas:** `>2,000` -> Comma inside a number.
+- **Inequalities:** `<4.0` -> Symbols inside a value.
+- **Component Names:** `1,25-Dihydroxyvitamin D` -> Starts with digit.
+**Solution:**
+- **Values:** Always use `[<>]*[\d.,]+` instead of `[\d.]+`.
+- **Methods:** Allow hyphens `[A-Z][A-Z\s&-]+`.
+- **Components:** Allow starting with digits `[A-Za-z0-9]...`.
+
+### 4. Visit Summaries (Column Order Swaps)
+**Problem:** "Visit Summary" documents often list labs in a different column order than the official "Lab Report".
+- Standard: `Name Value Flag Ref Unit`
+- Visit Summary: `Name Value Ref Unit Flag`
+**Solution:**
+- Create a specific regex for the alternate layout.
+- Use **Strict Validation** on fields like Reference Range to differentiate valid rows from noise.
+- **Ref Range Validator:** `(?P<ref_range>(?:[\d.]+\s*-\s*[\d.]+|[<>]=?\s*[\d.]+))` matches `1-5` or `<10` but rejects years like `1951`.
+
+### 5. Date & Panel Fallbacks
+**Problem:** Summaries often lack headers (Date, Panel Name) for every row.
+**Solution:**
+- **Date Fallback:** If row text has no date, extract `YYYY-MM-DD` from the filename.
+- **Panel Fallback:** If Panel Name is missing or generic (e.g., "LABS-VISIT"), default to the **Component Name** (e.g., Panel="Glucose" for a Glucose test). This is cleaner than grouping unrelated tests under a generic name.
+
+---
+
 ## Future Enhancements (Backlog)
 
 - [ ] Add support for additional facilities
