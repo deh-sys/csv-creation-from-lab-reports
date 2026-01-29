@@ -60,7 +60,7 @@ from facility_configs import get_config_for_filename, FACILITY_CONFIGS
 SCRIPT_DIR = Path(__file__).parent.resolve()
 OUTPUT_DIR = SCRIPT_DIR / "output"
 LOGS_DIR = SCRIPT_DIR / "logs"
-OUTPUT_FILE = OUTPUT_DIR / "lab_results.xlsx"
+OUTPUT_FILE = OUTPUT_DIR / "test-results.xlsx"
 DEBUG_LOG = LOGS_DIR / "_debug.log"
 MISSED_FILES_LOG = LOGS_DIR / "missed_files.txt"
 
@@ -70,9 +70,11 @@ CSV_COLUMNS = [
     'panel_name',
     'component',
     'test_date',
+    'result_type',
     'value',
     'ref_range',
     'unit',
+    'narrative',
     'flag',
     'page_marker',
 ]
@@ -465,23 +467,33 @@ def write_excel(results: list[dict], output_path: Path):
         'panel_name': 'Panel Name',
         'component': 'Component',
         'test_date': 'Date',
+        'result_type': 'Type',
         'value': 'Result',
         'ref_range': 'Ref Range',
         'unit': 'Units',
+        'narrative': 'Narrative',
         'flag': 'Flag',
         'page_marker': 'Bates'
     }
     df = df.rename(columns=column_map)
 
+    # Convert Date column to datetime objects for correct sorting
+    try:
+        df['Date'] = pd.to_datetime(df['Date'], format='%m/%d/%Y', errors='coerce')
+    except Exception as e:
+        print(f"Warning: Date conversion failed: {e}")
+
     # Reorder columns (Date first, Source/Facility last)
     display_order = [
         'Date',
+        'Type',
         'Panel Name',
         'Component',
         'Result',
         'Flag',
         'Ref Range',
         'Units',
+        'Narrative',
         'Bates',
         'Facility',
         'Source File'
@@ -490,7 +502,7 @@ def write_excel(results: list[dict], output_path: Path):
 
     # Create Excel writer
     try:
-        with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+        with pd.ExcelWriter(output_path, engine='xlsxwriter', datetime_format='mm/dd/yyyy') as writer:
             sheet_name = 'Lab Results'
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
@@ -515,7 +527,27 @@ def write_excel(results: list[dict], output_path: Path):
                 'font_name': 'Calibri',
                 'font_size': 13,
                 'align': 'center',
-                'valign': 'vcenter'
+                'valign': 'vcenter',
+                'text_wrap': True
+            })
+            
+            # Date format
+            date_format = workbook.add_format({
+                'num_format': 'mm/dd/yyyy',
+                'font_name': 'Calibri',
+                'font_size': 13,
+                'align': 'center',
+                'valign': 'vcenter',
+                'text_wrap': True
+            })
+
+            # Format for Findings (Left aligned)
+            left_data_format = workbook.add_format({
+                'font_name': 'Calibri',
+                'font_size': 13,
+                'align': 'left',
+                'valign': 'vcenter',
+                'text_wrap': True
             })
 
             # Format for Flag column (Red text for abnormal)
@@ -523,7 +555,8 @@ def write_excel(results: list[dict], output_path: Path):
                 'font_color': '#9C0006', 
                 'bg_color': '#FFC7CE',
                 'align': 'center',
-                'valign': 'vcenter'
+                'valign': 'vcenter',
+                'text_wrap': True
             })
             
             # Format for Ref Range (Force text + data font)
@@ -532,7 +565,8 @@ def write_excel(results: list[dict], output_path: Path):
                 'font_name': 'Calibri',
                 'font_size': 13,
                 'align': 'center',
-                'valign': 'vcenter'
+                'valign': 'vcenter',
+                'text_wrap': True
             })
 
             # Apply formatting
@@ -549,9 +583,13 @@ def write_excel(results: list[dict], output_path: Path):
                 # Cap width at 70 chars
                 width = min(max_len, 70)
                 
-                # Apply text format to 'Ref Range', normal data format to others
+                # Apply text format to 'Ref Range', left format to 'Narrative', normal data format to others
                 if col == 'Ref Range':
                     worksheet.set_column(idx, idx, width, text_format)
+                elif col == 'Narrative':
+                    worksheet.set_column(idx, idx, width, left_data_format)
+                elif col == 'Date':
+                    worksheet.set_column(idx, idx, width, date_format)
                 else:
                     worksheet.set_column(idx, idx, width, data_format)
 
@@ -611,13 +649,27 @@ def main():
         logger.warning("ocrmypdf not available")
 
     # Get input folder
-    input_folder = prompt_for_input_folder()
+    if len(sys.argv) > 1:
+        input_folder = Path(sys.argv[1])
+        if not input_folder.exists():
+            print(f"Error: Input path does not exist: {input_folder}")
+            sys.exit(1)
+    else:
+        input_folder = prompt_for_input_folder()
+    
     logger.info(f"Input folder: {input_folder}")
 
     # Get output folder
-    output_folder = prompt_for_output_folder()
+    if len(sys.argv) > 2:
+        output_folder = Path(sys.argv[2])
+    elif len(sys.argv) > 1:
+        # If running non-interactively but no output arg, use default
+        output_folder = Path.home() / "Desktop"
+    else:
+        output_folder = prompt_for_output_folder()
+
     logger.info(f"Output folder: {output_folder}")
-    output_file_path = output_folder / "lab_results.xlsx"
+    output_file_path = output_folder / "test-results.xlsx"
 
     # Find all PDFs
     print("\nScanning for PDF files...")

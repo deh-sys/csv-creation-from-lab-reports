@@ -22,6 +22,8 @@ class LabResult:
     unit: str = ""
     flag: str = ""
     page_marker: str = ""
+    result_type: str = "Chemistry"
+    narrative: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -35,6 +37,8 @@ class LabResult:
             'unit': self.unit,
             'flag': self.flag,
             'page_marker': self.page_marker,
+            'result_type': self.result_type,
+            'narrative': self.narrative,
         }
 
 
@@ -100,10 +104,15 @@ class FacilityConfig(ABC):
     COMPONENT_MAPPINGS = {
         'Albumin': [r'^ALB(UMIN)?(\s+SPEP)?$'],
         'Alkaline Phosphatase (ALP)': [r'^AL(KP|KALINE)(\s+Phosphatase)?$'],
-        'Alanine Aminotransferase (ALT)': [r'^ALT(\s+\(SGPT\))?$'],
-        'Aspartate Aminotransferase (AST)': [r'^AST$'],
+        'Alanine Aminotransferase (ALT)': [
+            r'^ALT(\s+\(SGPT\))?.*$',
+            r'^ALT.*$',
+        ],
+        'Aspartate Aminotransferase (AST)': [
+            r'^AST.*$',
+        ],
         'Basophils Absolute': [r'^BASO\s*#$'],
-        'Basophils %': [r'^BASO\s*%$'],
+        'Basophils %': [r'^BASO(PHILS)?\s*%?,?$'],
         'Total Bilirubin': [r'^(TBIL|BILIRUBIN,\s*TOTAL|Total\s+Bilirubin)$'],
         'Blood Urea Nitrogen (BUN)': [r'^BUN(\s+\d+)?$'],
         'Calcium': [r'^(CA|CALCIUM)$'],
@@ -115,11 +124,11 @@ class FacilityConfig(ABC):
         'Creatinine, Urine 24H': [r'^Creatinine,\s*24H\s*Ur$'],
         'Estimated Average Glucose (eAG)': [r'^EAG$'],
         'Eosinophils Absolute': [r'^EOS\s*#$'],
-        'Eosinophils %': [r'^EOS\s*%$'],
+        'Eosinophils %': [r'^EOS(INOPHILS)?\s*%?,?$'],
         'Iron (Fe)': [r'^FE$'],
         'Folate': [r'^FOLAT$'],
         'Glucose': [r'^GLU(COSE)?(,\s*RANDOM)?$'],
-        'Hematocrit (Hct)': [r'^(HCT|HEMATOCRIT)$'],
+        'Hematocrit (Hct)': [r'^(HCT|HEMATOCRIT)(,\s*AUTO)?$'],
         'HDL Cholesterol': [r'^d?HDL$'],
         'Hemoglobin (Hgb)': [r'^HGB|Hemoglobin$'],
         'Immature Granulocytes Absolute': [r'^IG\s*#$'],
@@ -128,33 +137,49 @@ class FacilityConfig(ABC):
         'Potassium': [r'^(K\+|POTASSIUM)$'],
         'LDL Cholesterol': [r'^LDL(\s+(DIRECT|CALCULATED))?$'],
         'Lymphocytes Absolute': [r'^LYMPH\s*#$'],
-        'Lymphocytes %': [r'^LYMPH\s*%$'],
+        'Lymphocytes %': [r'^LYMPH(OCYTES)?\s*%?,?$'],
         'Mean Corpuscular Hemoglobin (MCH)': [r'^MCH$'],
         'Mean Corpuscular Hemoglobin Concentration (MCHC)': [r'^MCHC$'],
         'Mean Corpuscular Volume (MCV)': [r'^MCV$'],
         'Monocytes Absolute': [r'^MONO\s*#$'],
-        'Monocytes %': [r'^MONO\s*%$'],
+        'Monocytes %': [r'^MONO(CYTES)?\s*%?,?$'],
         'Mean Platelet Volume (MPV)': [r'^MPV$'],
         'Sodium': [r'^(NA\+|SODIUM)$'],
         'Neutrophils Absolute': [r'^NEUT\s*#$'],
-        'Neutrophils %': [r'^NEUT\s*%$'],
+        'Neutrophils %': [r'^NEUT(ROPHILS)?\s*%?,?$'],
         'Platelet Count': [r'^(PLT|PLATELETS(,\s*AUTOMATED)?)$'],
         'Total Protein': [r'^(TP|TOTAL\s+PROTEIN|PROTEIN\s+TOTAL)$'],
         'Parathyroid Hormone (PTH), Intact': [r'^PTH(\s+INTACT)?$'],
         'Red Blood Cell Count (RBC)': [r'^RBC(,\s*AUTO)?$'],
-        'Red Cell Distribution Width (RDW)': [r'^RDW(,\s*BLOOD)?$'],
+        'Red Cell Distribution Width (RDW)': [r'^RDW(,\s*BLOOD)?.*$', r'^RDW,\s*RATIO.*$'],
         'Total Iron Binding Capacity (TIBC)': [r'^TIBC$'],
         'Triglycerides': [r'^TRIG(LYCERIDE)?$'],
         'Thyroid Stimulating Hormone (TSH)': [r'^TSH$'],
         'Vitamin B12': [r'^VIT(AMIN)?\s*B12$'],
-        'White Blood Cell Count (WBC)': [r'^WBC(,\s*AUTO)?$'],
+        'White Blood Cell Count (WBC)': [r'^(WBC|WBC\'S)(,?\s*AUTO)?$'],
         'Hemoglobin A1c (HbA1c)': [r'^(d%A1c|A1C)$'],
         'Anion Gap': [r'^Anion\s+Gap$'],
         'Lipase': [r'^Lipase$'],
         'Magnesium': [r'^Magnesium$'],
         'Phosphorus': [r'^Phosphorus$'],
-        'Urine pH': [r'^(F\s+)?U\s+PH$'],
+        'Urine pH': [r'^(F\s+)?U\s+PH|PH,\s+UA$'],
         'Calcium, Urine': [r'^Calcium,\s*Urine$'],
+        'Glucose, Urine': [r'^GLUCOSE,\s+UA$'],
+        'Specific Gravity, Urine': [r'^SPECIFIC\s+GRAVITY,\s+UA$'],
+        'Protein, Urine': [r'^PROTEIN,\s+UA$'],
+        'Ketones, Urine': [r'^KETONES,\s+UA|KET$'],
+        'Bilirubin, Urine': [r'^BILIRUBIN,\s+UA$'],
+        'Urobilinogen, Urine': [r'^UROBILINOGEN,.*$'],
+        'Nitrite, Urine': [r'^NITRITE,\s+UA$'],
+        'Leukocyte Esterase, Urine': [r'^LEUKOCYTE\s+ESTERASE,.*$'],
+        'Blood, Urine': [r'^UA\s+HGB$'],
+        'Mucus, Urine': [r'^MUCUS,\s+URINE$'],
+        'Granulocytes %': [r'^GRANULOCYTES\s*%,.*$'],
+        'Granulocytes': [r'^GRANULOCYTES$'],
+        'Monocytes %': [r'^MONO(CYTES|S)?\s*%?(,?\s*AUTO)?.*$'],
+        'Immature Granulocytes %': [r'^(IMMATURE|IMMATURE\s+GRAN\s*%)$'],
+        'WBC, Urine': [r'^WBC,\s*Urine.*$'],
+        'Urine pH': [r'^(F\s+)?U\s+PH|PH,\s+(UA|Urine)$'],
     }
 
     def matches_filename(self, filename: str) -> bool:

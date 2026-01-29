@@ -85,6 +85,27 @@ class KPAConfig(FacilityConfig):
         r'^\s*(?P<component>[A-Z]+):\s+(?P<value>[A-Z0-9]+)\s*$'
     )
 
+    # Pattern 5: Text-based results (Microbiology)
+    # SALMONELLA SPECIES Negative Negative 05/10/2023 GA
+    # REPORT Heavy 12/09/2023 GA
+    pattern_text_result = (
+        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-#%\(\)]+?)\s+'
+        r'(?P<value>Negative|Positive|Detected|Not\s+Detected|Heavy|Moderate|Light|Trace|Normal|Nonreactive|Reactive)\s+'
+        r'(?:(?P<ref_range>Negative|Positive|Detected|Not\s+Detected|[A-Za-z\s]+?)\s+)?'
+        r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
+        r'(?P<location>[A-Z0-9\s]+)'
+    )
+
+    # Pattern 6: Complex value (Reducing Substances)
+    # REDUCING SUBSTANCE, 1+(0.5 g/dL) Negative 05/17/2023 AML-
+    pattern_complex_value = (
+         r'^(?P<component>REDUCING\s+SUBSTANCE[^\s]*)\s+'
+         r'(?P<value>[\d\+]+\([\d\.\s]+g/dL\))\s+'
+         r'(?P<ref_range>Negative)\s+'
+         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
+         r'(?P<location>[A-Z0-9\s\-]+)'
+    )
+
     # Skip lines that are comments or interpretive data
     skip_patterns = [
         r'^Comment:',
@@ -159,7 +180,36 @@ class KPAConfig(FacilityConfig):
         raw_panel_name = self.extract_panel_name(text)
         panel_name = self.normalize_panel_name(raw_panel_name)
 
-        # Parse each line
+        # CHECK FOR IMAGING IMPRESSION
+        # Matches "IMPRESSION:" followed by text until a section break or end of string
+        # Uses DOTALL to capture newlines
+        impression_match = re.search(
+            r'IMPRESSION:\s*(?P<text>.*?)(?=\n(?:Electronically signed|Procedure Note|Authorizing Provider|RECOMMENDATION|ASSESSMENT|COMPONENT|Ref Analysis)|$)',
+            text,
+            re.DOTALL | re.IGNORECASE
+        )
+        
+        # Check if we already have this impression to avoid duplicates (rudimentary check)
+        # For now, just yield it. Excel user can dedup.
+        if impression_match:
+            impression_text = impression_match.group('text').strip()
+            if impression_text:
+                yield LabResult(
+                    source=source_filename,
+                    facility=self.name,
+                    panel_name=panel_name or "IMAGING",
+                    component="Impression",
+                    test_date=header_date,
+                    value="See Narrative",
+                    ref_range="",
+                    unit="",
+                    flag="",
+                    page_marker=page_marker,
+                    result_type="Imaging",
+                    narrative=impression_text
+                )
+
+        # Parse each line for standard labs
         lines = text.split('\n')
         i = 0
         while i < len(lines):
@@ -175,6 +225,8 @@ class KPAConfig(FacilityConfig):
             ref_range = ""
             row_date = None
             unit = ""
+            result_type = "Chemistry"
+            narrative = ""
 
             # Try Pattern 1: Full ref range on same line
             match = re.match(self.pattern_full, line, re.IGNORECASE)
@@ -226,6 +278,31 @@ class KPAConfig(FacilityConfig):
                     row_date = header_date
                     unit = "" # No unit usually
 
+            # Try Pattern 5: Text-based results (Microbiology)
+            if not match:
+                match = re.match(self.pattern_text_result, line, re.IGNORECASE)
+                if match:
+                    component = match.group('component')
+                    value = match.group('value')
+                    if match.group('ref_range'):
+                        ref_range = match.group('ref_range')
+                    row_date = match.group('date')
+                    unit = ""  # Qualitative results rarely have units
+                    result_type = "Microbiology"
+                    narrative = value
+            
+            # Try Pattern 6: Complex value
+            if not match:
+                match = re.match(self.pattern_complex_value, line, re.IGNORECASE)
+                if match:
+                    component = match.group('component')
+                    value = match.group('value')
+                    ref_range = match.group('ref_range')
+                    row_date = match.group('date')
+                    unit = ""
+                    result_type = "Microbiology"
+                    narrative = value
+
             # If we found a match, create result
             if component and value:
                 # Look for unit if not already found
@@ -246,6 +323,8 @@ class KPAConfig(FacilityConfig):
                     unit=unit,
                     flag="",
                     page_marker=page_marker,
+                    result_type=result_type,
+                    narrative=narrative,
                 )
                 yield result
 

@@ -120,6 +120,14 @@ class RCBConfig(FacilityConfig):
 
         # First pass: try pattern with reference range
         for match in re.finditer(self.row_pattern_with_ref, text, re.MULTILINE | re.IGNORECASE):
+            # SKIP HEADER GARBAGE
+            raw_comp = match.group('component').strip().upper()
+            if ('NAME' in raw_comp and 'VALUE' in raw_comp) or 'REFERENCE RANGE' in raw_comp:
+                continue
+            # Skip multi-header garbage lines like "U COL Yellow Yellow F U APPEAR..."
+            if 'U COL' in raw_comp or ' F U ' in raw_comp:
+                continue
+
             line_start = match.start()
             matched_lines.add(line_start)
 
@@ -139,6 +147,11 @@ class RCBConfig(FacilityConfig):
 
         # Second pass: try pattern with ref range but NO unit
         for match in re.finditer(self.row_pattern_no_unit, text, re.MULTILINE | re.IGNORECASE):
+            # SKIP HEADER GARBAGE
+            raw_comp = match.group('component').strip().upper()
+            if ('NAME' in raw_comp and 'VALUE' in raw_comp) or 'REFERENCE RANGE' in raw_comp:
+                continue
+
             line_start = match.start()
             if line_start in matched_lines:
                 continue
@@ -160,6 +173,13 @@ class RCBConfig(FacilityConfig):
 
         # Third pass: try pattern without reference range for unmatched lines
         for match in re.finditer(self.row_pattern_no_ref, text, re.MULTILINE | re.IGNORECASE):
+            # SKIP HEADER GARBAGE
+            raw_comp = match.group('component').strip().upper()
+            if ('NAME' in raw_comp and 'VALUE' in raw_comp) or 'REFERENCE RANGE' in raw_comp:
+                continue
+            if 'U COL' in raw_comp or ' F U ' in raw_comp:
+                continue
+
             line_start = match.start()
             if line_start in matched_lines:
                 continue  # Already matched by first pattern
@@ -180,6 +200,13 @@ class RCBConfig(FacilityConfig):
 
         # Fourth pass: try pattern with loose unit (no parens)
         for match in re.finditer(self.row_pattern_loose_unit, text, re.MULTILINE | re.IGNORECASE):
+            # SKIP HEADER GARBAGE
+            raw_comp = match.group('component').strip().upper()
+            if ('NAME' in raw_comp and 'VALUE' in raw_comp) or 'REFERENCE RANGE' in raw_comp:
+                continue
+            if 'U COL' in raw_comp or ' F U ' in raw_comp:
+                continue
+
             line_start = match.start()
             if line_start in matched_lines:
                 continue
@@ -200,6 +227,13 @@ class RCBConfig(FacilityConfig):
 
         # Fifth pass: try visit summary pattern (Val Ref Unit Flag)
         for match in re.finditer(self.row_pattern_visit_summary, text, re.MULTILINE | re.IGNORECASE):
+            # SKIP HEADER GARBAGE
+            raw_comp = match.group('component').strip().upper()
+            if ('NAME' in raw_comp and 'VALUE' in raw_comp) or 'REFERENCE RANGE' in raw_comp:
+                continue
+            if 'U COL' in raw_comp or ' F U ' in raw_comp:
+                continue
+
             line_start = match.start()
             if line_start in matched_lines:
                 continue

@@ -141,8 +141,31 @@ class MHBConfig(FacilityConfig):
         raw_panel_name = self.extract_panel_name(text)
         panel_name = self.normalize_panel_name(raw_panel_name)
 
-        # Check for (ABNORMAL) prefix in the entire text
-        has_abnormal = '(ABNORMAL)' in text.upper()
+        # CHECK FOR IMAGING IMPRESSION (Same as Kaiser)
+        # Matches "IMPRESSION:" followed by text until a section break or end of string
+        impression_match = re.search(
+            r'IMPRESSION:\s*(?P<text>.*?)(?=\n(?:Electronically signed|Procedure Note|Authorizing Provider|RECOMMENDATION|ASSESSMENT|COMPONENT|Ref Analysis)|$)',
+            text,
+            re.DOTALL | re.IGNORECASE
+        )
+        
+        if impression_match:
+            impression_text = impression_match.group('text').strip()
+            if impression_text:
+                yield LabResult(
+                    source=source_filename,
+                    facility=self.name,
+                    panel_name=panel_name or "IMAGING",
+                    component="Impression",
+                    test_date=header_date,
+                    value="See Narrative",
+                    ref_range="",
+                    unit="",
+                    flag="",
+                    page_marker=page_marker,
+                    result_type="Imaging",
+                    narrative=impression_text
+                )
 
         lines = text.split('\n')
         i = 0
@@ -160,6 +183,8 @@ class MHBConfig(FacilityConfig):
             row_date = None
             unit = ""
             flag = ""
+            result_type = "Chemistry"
+            narrative = ""
 
             # Try Pattern 1: Complete ref range
             match = re.match(self.pattern_complete, line, re.IGNORECASE)
@@ -226,8 +251,6 @@ class MHBConfig(FacilityConfig):
                     flag = 'H'
                 elif '(L)' in line:
                     flag = 'L'
-                elif has_abnormal:
-                    flag = 'A'
 
                 result = LabResult(
                     source=source_filename,
@@ -240,6 +263,8 @@ class MHBConfig(FacilityConfig):
                     unit=unit,
                     flag=flag,
                     page_marker=page_marker,
+                    result_type=result_type,
+                    narrative=narrative,
                 )
                 yield result
 

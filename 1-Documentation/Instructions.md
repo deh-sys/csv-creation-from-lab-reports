@@ -71,3 +71,7 @@ Files must include the facility marker at the end of the filename:
 - `2024-11-14--Labs-CBC--RCMC.pdf` (RCMC facility)
 - `2021-08-06--LIPID PANEL--Kaiser.pdf` (Kaiser facility)
 - `2025-08-18--PHOSPHORUS--Monument.pdf` (Monument facility)
+
+## For Developers
+
+See [Developer-Guide.md](Developer-Guide.md) for architectural details, regex strategies, and lessons learned.
