@@ -77,7 +77,114 @@ Extract structured lab test data from medical PDF reports (RCMC, Kaiser, Monumen
 
 ## Technical Specification
 
-### Architecture
+### Architecture Overview
+
+The project uses a **modular plugin architecture** that separates the core parsing engine from facility-specific pattern definitions. This makes it easy to add support for new medical facilities without modifying the main script.
+
+```
+csv-creation-from-lab-reports/
+├── lab_parser.py                    # Core engine (facility-agnostic)
+├── facility_configs/                # Plugin directory
+│   ├── __init__.py                  # Registry & auto-discovery
+│   ├── base_config.py               # Abstract base class + LabResult dataclass
+│   ├── rcb_config.py                # RCMC patterns (native text)
+│   ├── kpa_config.py                # Kaiser patterns (OCR)
+│   └── mhb_config.py                # Monument patterns (OCR)
+├── output/
+│   └── lab_results.csv              # Combined output
+└── logs/
+    ├── _debug.log                   # Verbose processing log
+    └── missed_files.txt             # Failed files for review
+```
+
+### Core Components
+
+#### 1. `lab_parser.py` - The Engine (Facility-Agnostic)
+
+The main script handles:
+- User input (folder path)
+- PDF discovery and facility detection
+- OCR preprocessing (when `config.requires_ocr = True`)
+- Text extraction via pdfplumber
+- Delegating parsing to the appropriate facility config
+- CSV output and logging
+
+**Key principle:** The engine knows nothing about specific PDF formats. It simply:
+1. Finds the right config using `get_config_for_filename()`
+2. Calls `config.extract_results(text, filename)`
+3. Collects the `LabResult` objects returned
+
+#### 2. `base_config.py` - The Contract
+
+Defines what every facility config must provide:
+
+```python
+@dataclass
+class LabResult:
+    """Standard output format for all facilities."""
+    source: str          # Source filename
+    facility: str        # Facility name
+    panel_name: str      # Test panel (CMP, CBC, etc.)
+    component: str       # Individual test (Glucose, WBC, etc.)
+    test_date: str       # Collection date
+    value: str           # Result value
+    ref_range: str       # Reference range
+    unit: str            # Measurement unit
+    flag: str            # Abnormal flag (H/L/A)
+    page_marker: str     # Page identifier
+
+class FacilityConfig(ABC):
+    """Abstract base - every facility config must implement this."""
+
+    # Required attributes
+    name: str                      # e.g., "RCMC", "Kaiser"
+    filename_patterns: list[str]   # Regex to match filenames
+    requires_ocr: bool             # Does this facility need OCR?
+
+    # Optional patterns (can be overridden)
+    date_pattern: str
+    page_marker_pattern: str
+
+    # Required method
+    @abstractmethod
+    def extract_results(self, text: str, source_filename: str) -> Generator[LabResult, None, None]:
+        """Parse text and yield LabResult objects."""
+        pass
+
+    # Provided helper methods
+    def matches_filename(self, filename: str) -> bool
+    def extract_date(self, text: str) -> str
+    def extract_page_marker(self, text: str) -> str
+    def normalize_test_name(self, name: str) -> str
+```
+
+#### 3. `__init__.py` - The Registry
+
+Auto-discovers and registers all facility configs:
+
+```python
+from .rcb_config import RCBConfig
+from .kpa_config import KPAConfig
+from .mhb_config import MHBConfig
+
+# Add new configs here
+FACILITY_CONFIGS = [
+    RCBConfig(),
+    KPAConfig(),
+    MHBConfig(),
+    # NewFacilityConfig(),  # <-- Just add new facilities here
+]
+
+def get_config_for_filename(filename: str) -> FacilityConfig | None:
+    """Return the appropriate config based on filename."""
+    for config in FACILITY_CONFIGS:
+        if config.matches_filename(filename):
+            return config
+    return None
+```
+
+### Processing Flow
+
 ```
 lab_parser.py
 ├── Startup Phase
@@ -100,6 +207,117 @@ lab_parser.py
     ├── Write missed files log
     └── Print summary statistics
 ```
+
+---
+
+## How to Add a New Facility
+
+Adding support for a new medical facility requires **only 2 steps**:
+
+### Step 1: Create the Config File
+
+Create `facility_configs/new_facility_config.py`:
+
+```python
+"""
+Configuration for NewFacility lab reports.
+Document the PDF format here for future reference.
+"""
+
+import re
+from typing import Generator
+from .base_config import FacilityConfig, LabResult
+
+
+class NewFacilityConfig(FacilityConfig):
+    """Configuration for NewFacility lab reports."""
+
+    # REQUIRED: Facility identification
+    name = "NewFacility"
+    filename_patterns = [
+        r'--NewFacility\.pdf$',
+        r'--NF\.pdf$',
+    ]
+
+    # REQUIRED: Does this facility need OCR?
+    requires_ocr = True  # Set to False for native text PDFs
+
+    # OPTIONAL: Patterns for common extractions
+    date_pattern = r'Collection Date:\s*(?P<date>\d{2}/\d{2}/\d{4})'
+    page_marker_pattern = r'^NF\s+\d+\s*$'
+
+    # FACILITY-SPECIFIC: Your regex patterns
+    row_pattern = (
+        r'^(?P<component>[A-Z][A-Za-z\s]+)\s+'
+        r'(?P<value>[\d.]+)\s+'
+        r'(?P<ref_range>[\d.\-]+)\s+'
+        r'(?P<date>\d{2}/\d{2}/\d{4})'
+    )
+
+    # REQUIRED: Implement the extraction logic
+    def extract_results(self, text: str, source_filename: str) -> Generator[LabResult, None, None]:
+        """Extract lab results from NewFacility page text."""
+
+        # Get common metadata
+        test_date = self.extract_date(text)
+        page_marker = self.extract_page_marker(text)
+
+        # Parse each line
+        for line in text.split('\n'):
+            line = line.strip()
+            match = re.match(self.row_pattern, line)
+
+            if match:
+                yield LabResult(
+                    source=source_filename,
+                    facility=self.name,
+                    panel_name="",  # Extract if available
+                    component=match.group('component'),
+                    test_date=match.group('date') or test_date,
+                    value=match.group('value'),
+                    ref_range=match.group('ref_range'),
+                    unit="",  # Extract if available
+                    flag="",  # Extract if available
+                    page_marker=page_marker,
+                )
+```
+
+### Step 2: Register in `__init__.py`
+
+Add two lines to `facility_configs/__init__.py`:
+
+```python
+from .new_facility_config import NewFacilityConfig  # Add import
+
+FACILITY_CONFIGS = [
+    RCBConfig(),
+    KPAConfig(),
+    MHBConfig(),
+    NewFacilityConfig(),  # Add to registry
+]
+```
+
+**That's it.** The main script will automatically:
+- Detect files matching your `filename_patterns`
+- Run OCR if `requires_ocr = True`
+- Call your `extract_results()` method
+- Include results in the unified CSV output
+
+### Tips for New Facility Configs
+
+1. **Start by examining the OCR output**
+   ```bash
+   ocrmypdf --force-ocr input.pdf /tmp/output.pdf
+   python3 -c "import pdfplumber; print(pdfplumber.open('/tmp/output.pdf').pages[0].extract_text())"
+   ```
+
+2. **Document the expected format** in the module docstring (see existing configs)
+
+3. **Use multiple patterns** for different row formats (with/without ref range, flags, etc.)
+
+4. **Implement fallbacks** for multi-line data (see `kpa_config.py` and `mhb_config.py`)
+
+5. **Test incrementally** - run the parser and check `missed_files.txt` and CSV output
 
 ### Regex Patterns
 
