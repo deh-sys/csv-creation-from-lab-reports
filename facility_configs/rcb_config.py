@@ -60,7 +60,7 @@ class RCBConfig(FacilityConfig):
     # Row pattern with reference range but NO unit (e.g., RATIO)
     # F RATIO 1.7 0.0-6.7
     row_pattern_no_unit = (
-        r'^(?:F\s+)?'
+        r'^F\s+'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.,<>]+)\s*'
         r'(?P<flag>[HL]+)?\s+'
@@ -69,7 +69,7 @@ class RCBConfig(FacilityConfig):
 
     # Row pattern without reference range (e.g., F EAG 89 (mg/dL))
     row_pattern_no_ref = (
-        r'^(?:F\s+)?'
+        r'^F\s+'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.,<>]+)\s*'
         r'\((?P<unit>[^)]+)\)'
@@ -77,10 +77,20 @@ class RCBConfig(FacilityConfig):
 
     # Row pattern with loose unit (not in parens), e.g. "50,000 CFU/ml"
     row_pattern_loose_unit = (
-        r'^(?:F\s+)?'
+        r'^F\s+'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.,<>]+)\s+'
         r'(?P<unit>[^\s\(\)]+)'
+    )
+
+    # Row pattern for Visit Summary (different column order: Val Ref Unit Flag)
+    # e.g. "IONIZED CALCIUM 1.42 1.12-1.32 mmol/L HH"
+    row_pattern_visit_summary = (
+        r'^(?:F\s+)?'
+        r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
+        r'(?P<value>[\d.,<>]+)\s+'
+        r'(?P<ref_range>[\d.\-<>]+)\s+'
+        r'(?P<unit>[^\s]+)(?:\s+(?P<flag>[HL]+))?$'
     )
 
     def extract_panel_name(self, text: str) -> str:
@@ -183,6 +193,26 @@ class RCBConfig(FacilityConfig):
                 ref_range="",  # No reference range
                 unit=self.normalize_unit(match.group('unit')),
                 flag="",  # No flag
+                page_marker=page_marker,
+            )
+            yield result
+
+        # Fifth pass: try visit summary pattern (Val Ref Unit Flag)
+        for match in re.finditer(self.row_pattern_visit_summary, text, re.MULTILINE | re.IGNORECASE):
+            line_start = match.start()
+            if line_start in matched_lines:
+                continue
+
+            result = LabResult(
+                source=source_filename,
+                facility=self.name,
+                panel_name=panel_name,
+                component=self.normalize_component_name(match.group('component')),
+                test_date=test_date,
+                value=self.normalize_value(match.group('value')),
+                ref_range=self.normalize_ref_range(match.group('ref_range')),
+                unit=self.normalize_unit(match.group('unit')),
+                flag=match.group('flag') or "",
                 page_marker=page_marker,
             )
             yield result
