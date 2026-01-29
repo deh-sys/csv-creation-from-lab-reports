@@ -9,6 +9,17 @@ Extract structured lab test data from medical PDF reports (RCMC, Kaiser, Monumen
 
 ## Version History
 
+### v1.1.1 - 2026-01-29 (Monument Reference Range Fix)
+**Bug Fixes:**
+- Fixed Monument multi-line reference range parsing (e.g., "0.60 -" on one line, "1.10" on next)
+- Handle OCR artifacts like "=" between method and date
+- Added multiple pattern matching approach: complete ref range, partial ref range, and fallback
+
+**Known Limitations:**
+- Some OCR corruption cannot be fixed programmatically (e.g., "3-11" read as "321")
+
+---
+
 ### v1.1.0 - 2026-01-29 (Panel Name Support)
 **Features:**
 - Added `panel_name` column to distinguish test panels from individual components
