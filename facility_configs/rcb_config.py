@@ -85,12 +85,13 @@ class RCBConfig(FacilityConfig):
 
     # Row pattern for Visit Summary (different column order: Val Ref Unit Flag)
     # e.g. "IONIZED CALCIUM 1.42 1.12-1.32 mmol/L HH"
+    # Strict ref range (must have - or <>) to avoid matching dates/years
     row_pattern_visit_summary = (
         r'^(?:F\s+)?'
         r'(?P<component>[A-Za-z][A-Za-z0-9+\-#%,\s]+?)\s+'
         r'(?P<value>[\d.,<>]+)\s+'
-        r'(?P<ref_range>[\d.\-<>]+)\s+'
-        r'(?P<unit>[^\s]+)(?:\s+(?P<flag>[HL]+))?$'
+        r'(?P<ref_range>(?:[\d.]+\s*-\s*[\d.]+|[<>]=?\s*[\d.]+))\s+'
+        r'(?P<unit>[^\s:]+)(?:\s+(?P<flag>[HL]+))?$'
     )
 
     def extract_panel_name(self, text: str) -> str:
