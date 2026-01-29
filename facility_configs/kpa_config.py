@@ -52,30 +52,36 @@ class KPAConfig(FacilityConfig):
     # Pattern 1: Full line with complete ref range
     # CHOLESTEROL 195 0-199 08/06/2021 KAISER
     pattern_full = (
-        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
+        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-#%]+?)\s+'
         r'(?P<value>[\d.]+)\s+'
         r'(?P<ref_range>[\d.]+\s*-\s*[\d.]+)\s+'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
-        r'(?P<location>KAISER|GA|REGIONAL)'
+        r'(?P<location>[A-Z0-9\s]+)'
     )
 
     # Pattern 2: Line with partial ref range (continues on next line)
     # TSH 2.03 0.35 - 02/07/2022 GA
     # or: HDL TES 39.0 - 08/06/2021 KAISER
     pattern_partial_ref = (
-        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
+        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-#%]+?)\s+'
         r'(?P<value>[\d.]+)\s+'
         r'(?P<ref_start>[\d.]+)\s*-\s*'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
-        r'(?P<location>KAISER|GA|REGIONAL)'
+        r'(?P<location>[A-Z0-9\s]+)'
     )
 
     # Pattern 3: Simple pattern - component name, value, and date (no ref range on same line)
     pattern_simple = (
-        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-]+?)\s+'
+        r'^(?P<component>[A-Z][A-Z0-9\s,\'\-#%]+?)\s+'
         r'(?P<value>[\d.]+)\s+'
         r'(?P<date>\d{2}/\d{2}/\d{4})\s+'
-        r'(?P<location>KAISER|GA|REGIONAL)'
+        r'(?P<location>[A-Z0-9\s]+)'
+    )
+
+    # Pattern 4: Key-Value pair (Urinalysis Dipstick)
+    # GLU: NEG
+    pattern_key_value = (
+        r'^\s*(?P<component>[A-Z]+):\s+(?P<value>[A-Z0-9]+)\s*$'
     )
 
     # Skip lines that are comments or interpretive data
@@ -207,6 +213,15 @@ class KPAConfig(FacilityConfig):
                     component = match.group('component')
                     value = match.group('value')
                     row_date = match.group('date')
+
+            # Try Pattern 4: Key-Value (Dipstick)
+            if not match:
+                match = re.match(self.pattern_key_value, line)
+                if match:
+                    component = match.group('component')
+                    value = match.group('value')
+                    row_date = header_date
+                    unit = "" # No unit usually
 
             # If we found a match, create result
             if component and value:

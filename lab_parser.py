@@ -478,7 +478,8 @@ def write_excel(results: list[dict], output_path: Path):
             header_format = workbook.add_format({
                 'bold': True,
                 'text_wrap': False,
-                'valign': 'top',
+                'valign': 'vcenter',
+                'align': 'center',
                 'fg_color': '#D7E4BC',  # Light green/grayish
                 'border': 1,
                 'font_name': 'Baskerville',
@@ -488,17 +489,26 @@ def write_excel(results: list[dict], output_path: Path):
             # Base format for all data cells
             data_format = workbook.add_format({
                 'font_name': 'Calibri',
-                'font_size': 13
+                'font_size': 13,
+                'align': 'center',
+                'valign': 'vcenter'
             })
 
             # Format for Flag column (Red text for abnormal)
-            red_text = workbook.add_format({'font_color': '#9C0006', 'bg_color': '#FFC7CE'})
+            red_text = workbook.add_format({
+                'font_color': '#9C0006', 
+                'bg_color': '#FFC7CE',
+                'align': 'center',
+                'valign': 'vcenter'
+            })
             
             # Format for Ref Range (Force text + data font)
             text_format = workbook.add_format({
                 'num_format': '@',
                 'font_name': 'Calibri',
-                'font_size': 13
+                'font_size': 13,
+                'align': 'center',
+                'valign': 'vcenter'
             })
 
             # Apply formatting
@@ -506,13 +516,14 @@ def write_excel(results: list[dict], output_path: Path):
             # 1. Set column widths and base format
             for idx, col in enumerate(df.columns):
                 # Calculate max width of data in this column
+                # Add more padding (+8) to make it spacious
                 max_len = max(
                     df[col].astype(str).map(len).max(),
                     len(col)
-                ) + 2
+                ) + 8
                 
-                # Cap width at 60 chars
-                width = min(max_len, 60)
+                # Cap width at 70 chars
+                width = min(max_len, 70)
                 
                 # Apply text format to 'Ref Range', normal data format to others
                 if col == 'Ref Range':
@@ -634,14 +645,23 @@ def main():
     skipped_count = len(categorized['unknown'])
     error_count = len(missed_files)
 
-    print(f"✅ Processed: {processed_count} | ⚠️  Skipped: {skipped_count} | ❌ Errors: {error_count}")
+    print(f"✅ Processed: {processed_count} | ⚠️  Skipped: {skipped_count} | ❌ No Results / Errors: {error_count}")
     print(f"\nResults: {len(all_results)} lab values extracted")
     print(f"Output:  {output_file_path}")
 
     if missed_files:
-        print(f"Missed:  {MISSED_FILES_LOG}")
+        print(f"\nFiles with No Results (First 10):")
+        for i, msg in enumerate(missed_files[:10]):
+            # Clean up the message to just show filename if possible, or short error
+            # msg format is typically "filename: error"
+            print(f"  - {msg}")
+        
+        if len(missed_files) > 10:
+            print(f"  ...and {len(missed_files) - 10} more (see {MISSED_FILES_LOG.name})")
+        
+        print(f"\nFull List: {MISSED_FILES_LOG}")
 
-    print(f"Log:     {DEBUG_LOG}")
+    print(f"Log:       {DEBUG_LOG}")
 
     logger.info(f"Completed: {processed_count} processed, {error_count} errors, {len(all_results)} results")
 
