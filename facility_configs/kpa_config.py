@@ -221,7 +221,7 @@ class KPAConfig(FacilityConfig):
                     source=source_filename,
                     facility=self.name,
                     panel_name=panel_name,
-                    component=self.normalize_component(component),
+                    component=self.normalize_component_name(component.replace(' TES', '')),
                     test_date=row_date or header_date,
                     value=self.normalize_value(value),
                     ref_range=self.normalize_ref_range(ref_range),
@@ -232,9 +232,3 @@ class KPAConfig(FacilityConfig):
                 yield result
 
             i += 1
-
-    def normalize_component(self, name: str) -> str:
-        """Clean up component name."""
-        # Remove trailing TES if present (OCR artifact)
-        name = re.sub(r'\s+TES$', '', name)
-        return ' '.join(name.split())

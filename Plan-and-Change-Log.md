@@ -9,6 +9,18 @@ Extract structured lab test data from medical PDF reports (RCMC, Kaiser, Monumen
 
 ## Version History
 
+### v1.6.0 - 2026-01-29 (Component Name Normalization)
+**Features:**
+- **Standardized Component Names:** Merged variations into standard medical names:
+  - `WBC`, `WBC, AUTO` -> **White Blood Cell Count (WBC)**
+  - `CREA`, `CREATININE` -> **Creatinine**
+  - `ALB`, `ALBUMIN` -> **Albumin**
+  - `A1C`, `d%A1c` -> **Hemoglobin A1c (HbA1c)**
+  - And many more...
+- Ensures consistent analysis across different lab providers.
+
+---
+
 ### v1.5.0 - 2026-01-29 (Parallel Processing)
 **Performance:**
 - **Multi-Core Support:** Now processes multiple PDFs simultaneously using all available CPU cores (`ProcessPoolExecutor`).
@@ -19,12 +31,13 @@ Extract structured lab test data from medical PDF reports (RCMC, Kaiser, Monumen
 
 ### v1.4.0 - 2026-01-29 (Panel Name Normalization)
 **Features:**
-- **Standardized Panel Names:** Merged different facility names into a single standard:
-  - `CMP` (matches "Complete Metabolic Panel", "ABNORMAL_COMPREHENSIVE...", etc.)
-  - `CBC` (matches "CBC Auto Diff", "ABNORMAL_CBC_W", etc.)
-  - `Lipid Panel` (matches "LIPID PANEL", "Lipid Panel")
-  - `TSH` (matches "TSH (Thyroid...)", "TSH")
-  - `Urinalysis` (matches "LABS-UA", "URINALYSIS")
+- **Standardized Panel Names:** Merged different facility names into a single standard using "Full Name (Abbreviation)" format:
+  - `Comprehensive Metabolic Panel (CMP)`
+  - `Complete Blood Count (CBC)`
+  - `Lipid Panel`
+  - `Thyroid Stimulating Hormone (TSH)`
+  - `Urinalysis (UA)`
+  - `Hemoglobin A1c (HbA1c)`
 - Improves sorting and pivot table analysis in Excel.
 
 ---

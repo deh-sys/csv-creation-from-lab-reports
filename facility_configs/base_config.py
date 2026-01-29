@@ -57,40 +57,104 @@ class FacilityConfig(ABC):
     # Key = Standardized Name
     # Value = List of regex patterns to match against the raw panel name
     PANEL_MAPPINGS = {
-        'CMP': [
+        'Comprehensive Metabolic Panel (CMP)': [
             r'Comprehensive\s*Metabolic',
             r'^CMP',
             r'ABNORMAL_COMPREHENSIVE_METABOLIC',
         ],
-        'CBC': [
+        'Complete Blood Count (CBC)': [
             r'^CBC',
             r'ABNORMAL_CBC',
         ],
         'Lipid Panel': [
             r'Lipid\s*Panel',
         ],
-        'TSH': [
+        'Thyroid Stimulating Hormone (TSH)': [
             r'^TSH',
         ],
-        'Urinalysis': [
+        'Urinalysis (UA)': [
             r'LABS-UA',
             r'URINALYSIS',
         ],
         'Iron Panel': [
             r'LABS-IRON',
         ],
-        'Vitamin B12/Folate': [
+        'Vitamin B12 and Folate': [
             r'Vitamin\s*B12\s*and\s*Folate',
         ],
-        'Vitamin B12': [
+        'Vitamin B12 (Cobalamin)': [
             r'VITAMIN\s*B12',
         ],
-        'Protein Electrophoresis': [
+        'Serum Protein Electrophoresis (SPEP)': [
             r'PROTEIN\s*ELECTROPHORESIS',
         ],
-        'PTH': [
+        'Parathyroid Hormone (PTH)': [
             r'^PTH',
         ],
+        'Hemoglobin A1c (HbA1c)': [
+            r'^A1C',
+        ],
+    }
+
+    # Standard Component Name Mappings
+    COMPONENT_MAPPINGS = {
+        'Albumin': [r'^ALB(UMIN)?(\s+SPEP)?$'],
+        'Alkaline Phosphatase (ALP)': [r'^AL(KP|KALINE)(\s+Phosphatase)?$'],
+        'Alanine Aminotransferase (ALT)': [r'^ALT(\s+\(SGPT\))?$'],
+        'Aspartate Aminotransferase (AST)': [r'^AST$'],
+        'Basophils Absolute': [r'^BASO\s*#$'],
+        'Basophils %': [r'^BASO\s*%$'],
+        'Total Bilirubin': [r'^(TBIL|BILIRUBIN,\s*TOTAL|Total\s+Bilirubin)$'],
+        'Blood Urea Nitrogen (BUN)': [r'^BUN(\s+\d+)?$'],
+        'Calcium': [r'^(CA|CALCIUM)$'],
+        'Chloride': [r'^(CHLORIDE|Cl-)$'],
+        'Total Cholesterol': [r'^(CHOL(ESTEROL)?)$'],
+        'Carbon Dioxide (CO2)': [r'^CO2$'],
+        'Calcium, Corrected': [r'^(CORR\s+CA|Corrected\s+Calcium)$'],
+        'Creatinine': [r'^(CREA|CREATININE)$'],
+        'Creatinine, Urine 24H': [r'^Creatinine,\s*24H\s*Ur$'],
+        'Estimated Average Glucose (eAG)': [r'^EAG$'],
+        'Eosinophils Absolute': [r'^EOS\s*#$'],
+        'Eosinophils %': [r'^EOS\s*%$'],
+        'Iron (Fe)': [r'^FE$'],
+        'Folate': [r'^FOLAT$'],
+        'Glucose': [r'^GLU(COSE)?(,\s*RANDOM)?$'],
+        'Hematocrit (Hct)': [r'^(HCT|HEMATOCRIT)$'],
+        'HDL Cholesterol': [r'^d?HDL$'],
+        'Hemoglobin (Hgb)': [r'^HGB|Hemoglobin$'],
+        'Immature Granulocytes Absolute': [r'^IG\s*#$'],
+        'Immature Granulocytes %': [r'^IMMATURE\s+GRAN\s*%$'],
+        'Calcium, Ionized': [r'^IONIZED\s+CALCIUM$'],
+        'Potassium': [r'^(K\+|POTASSIUM)$'],
+        'LDL Cholesterol': [r'^LDL(\s+(DIRECT|CALCULATED))?$'],
+        'Lymphocytes Absolute': [r'^LYMPH\s*#$'],
+        'Lymphocytes %': [r'^LYMPH\s*%$'],
+        'Mean Corpuscular Hemoglobin (MCH)': [r'^MCH$'],
+        'Mean Corpuscular Hemoglobin Concentration (MCHC)': [r'^MCHC$'],
+        'Mean Corpuscular Volume (MCV)': [r'^MCV$'],
+        'Monocytes Absolute': [r'^MONO\s*#$'],
+        'Monocytes %': [r'^MONO\s*%$'],
+        'Mean Platelet Volume (MPV)': [r'^MPV$'],
+        'Sodium': [r'^(NA\+|SODIUM)$'],
+        'Neutrophils Absolute': [r'^NEUT\s*#$'],
+        'Neutrophils %': [r'^NEUT\s*%$'],
+        'Platelet Count': [r'^(PLT|PLATELETS(,\s*AUTOMATED)?)$'],
+        'Total Protein': [r'^(TP|TOTAL\s+PROTEIN|PROTEIN\s+TOTAL)$'],
+        'Parathyroid Hormone (PTH), Intact': [r'^PTH(\s+INTACT)?$'],
+        'Red Blood Cell Count (RBC)': [r'^RBC(,\s*AUTO)?$'],
+        'Red Cell Distribution Width (RDW)': [r'^RDW(,\s*BLOOD)?$'],
+        'Total Iron Binding Capacity (TIBC)': [r'^TIBC$'],
+        'Triglycerides': [r'^TRIG(LYCERIDE)?$'],
+        'Thyroid Stimulating Hormone (TSH)': [r'^TSH$'],
+        'Vitamin B12': [r'^VIT(AMIN)?\s*B12$'],
+        'White Blood Cell Count (WBC)': [r'^WBC(,\s*AUTO)?$'],
+        'Hemoglobin A1c (HbA1c)': [r'^(d%A1c|A1C)$'],
+        'Anion Gap': [r'^Anion\s+Gap$'],
+        'Lipase': [r'^Lipase$'],
+        'Magnesium': [r'^Magnesium$'],
+        'Phosphorus': [r'^Phosphorus$'],
+        'Urine pH': [r'^(F\s+)?U\s+PH$'],
+        'Calcium, Urine': [r'^Calcium,\s*Urine$'],
     }
 
     def matches_filename(self, filename: str) -> bool:
@@ -115,13 +179,28 @@ class FacilityConfig(ABC):
                     return standard_name
                     
         # Return Title Case if no match found (cleans up ALL CAPS)
-        # But keep acronyms like 'ALT' or 'DNA' if distinct? 
-        # For now, just return as-is or title case.
-        # Let's return original string if no match, but maybe Capitalized.
         if raw_clean.isupper():
             return raw_clean.title()
             
         return raw_clean
+
+    def normalize_component_name(self, raw_name: str) -> str:
+        """
+        Normalize standard component names (e.g., 'WBC, AUTO' -> 'White Blood Cell Count (WBC)').
+        """
+        if not raw_name:
+            return ""
+        
+        # Basic cleanup first
+        clean_name = self.normalize_test_name(raw_name)
+        
+        for standard_name, patterns in self.COMPONENT_MAPPINGS.items():
+            for pattern in patterns:
+                if re.search(pattern, clean_name, re.IGNORECASE):
+                    return standard_name
+        
+        # Return original cleaned name if no match
+        return clean_name
 
     def extract_date(self, text: str) -> str:
         """Extract the collection/test date from page text."""

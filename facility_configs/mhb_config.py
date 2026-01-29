@@ -213,7 +213,7 @@ class MHBConfig(FacilityConfig):
                     source=source_filename,
                     facility=self.name,
                     panel_name=panel_name,
-                    component=self.normalize_component(component),
+                    component=self.normalize_component_name(re.sub(r'\s*\([HL]\)\s*', ' ', component)),
                     test_date=row_date or header_date,
                     value=self.normalize_value(value),
                     ref_range=self.normalize_ref_range(ref_range),
@@ -224,12 +224,6 @@ class MHBConfig(FacilityConfig):
                 yield result
 
             i += 1
-
-    def normalize_component(self, name: str) -> str:
-        """Clean up component name."""
-        # Remove (H) or (L) flags from name
-        name = re.sub(r'\s*\([HL]\)\s*', ' ', name)
-        return ' '.join(name.split())
 
     def normalize_ref_range(self, ref_range: str) -> str:
         """Clean up reference range string."""
